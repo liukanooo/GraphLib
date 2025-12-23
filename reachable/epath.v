@@ -4,15 +4,13 @@ Require Import Coq.ZArith.ZArith.
 Require Import Coq.Logic.Classical_Prop.
 Require Import Coq.micromega.Psatz.
 Require Import SetsClass.SetsClass.
-Require Import ListLib.Base.Positional.
-Require Import ListLib.Base.Inductive.
 From GraphLib Require Import graph_basic reachable_basic path path_basic Zweight.
 From MaxMinLib Require Import MaxMin Interface.
+From ListLib Require Import Base.Inductive Base.Positional General.NoDup.
 
 Import SetsNotation.
 
 Local Open Scope sets.
-Local Open Scope Z.
 
 Section EPATH.
 
@@ -359,30 +357,66 @@ Proof.
     eapply valid_epath_cons; eauto.
 Qed.
 
-(* 下面是关于简单路径的部分，要求不经过重复的边。这一定义可能在最小生成树时有用 *)
+(* epath上的简单路径：不经过重复边 *)
+Definition is_simple_epath (g: G) (u: V) (p: list E) (v: V): Prop :=
+  valid_epath g u p v /\ NoDup p.
 
-Definition simple_epath (g: G) (u: V) (p: list E) (v: V): Prop :=
-  NoDup p /\ valid_epath g u p v.
-
-Definition simple_circuit (g: G) (e: list E) (u: V): Prop :=
-  simple_epath g u e u.
-
-Definition have_simple_circuit (g: G) : Prop :=
-  exists u p, simple_epath g u p u.
-
-Lemma valid_path_evalid: forall g p u v,
-  valid_epath g u p v ->
-  forall e, In e p -> evalid g e.
+(* 移除epath中的环 *)
+(* 需要边的某种唯一性；有向图的边唯一性强于无向图的边唯一性，所有我们只证明后者 *)
+Lemma valid_epath_shorten_cycle
+  {step_aux_unique_undirected: forall g e x1 y1 x2 y2, step_aux g e x1 y1 -> step_aux g e x2 y2 -> 
+  (x1 = x2 /\ y1 = y2) \/ (x1 = y2 /\ x2 = y1)}: 
+  forall g u v l1 e l2 l3,
+  valid_epath g u (l1 ++ e :: l2 ++ e :: l3) v ->
+  exists q, valid_epath g u q v /\ length q < length (l1 ++ e :: l2 ++ e :: l3).
 Proof.
-Admitted.
+  intros g u v l1 e l2 l3 H.
+  apply valid_epath_app_inv in H.
+  destruct H as [u_mid [H_path_l1 H_rest1]].
+  apply valid_epath_cons_inv in H_rest1.
+  destruct H_rest1 as [v_mid [H_step1 H_rest2]].
+  apply valid_epath_app_inv in H_rest2.
+  destruct H_rest2 as [u_mid2 [H_path_l2 H_tail]].
+  apply valid_epath_cons_inv in H_tail.
+  destruct H_tail as [v_mid2 [H_step2 H_path_l3]].
+  pose proof (step_aux_unique_undirected g e u_mid v_mid u_mid2 v_mid2 H_step1 H_step2) 
+  as [[]|[]]; subst.
+  - exists (l1 ++ e :: l3).
+    split.
+    + eapply valid_epath_app; eauto.
+      eapply valid_epath_cons; eauto.
+    + rewrite !length_app; simpl.
+      rewrite !length_app; simpl. lia.
+  - exists (l1 ++ l3).
+    split.
+    + eapply valid_epath_app; eauto.
+    + rewrite !length_app; simpl. 
+      rewrite !length_app; simpl. lia.
+Qed.
 
-Lemma path_simplfier 
-  {stepuniqueundirected: StepUniqueUndirected G V E}: 
-  forall g p u v,
+(* 任意两点之间的epath能够被转换为简单的epath *)
+(* 前提：给出无向图或有向图的step_aux的type class *)
+(* 这也提示出step_aux或许处于一个不正确的位置 *)
+Theorem valid_epath_simple 
+{step_aux_unique_undirected: forall g e x1 y1 x2 y2, step_aux g e x1 y1 -> step_aux g e x2 y2 -> 
+  (x1 = x2 /\ y1 = y2) \/ (x1 = y2 /\ x2 = y1)}:
+  forall g u p v,
   valid_epath g u p v ->
-  exists q, simple_epath g u q v.
+  exists q, is_simple_epath g u q v.
 Proof.
-Admitted.
+  intros g u p v H_valid.
+  remember (length p) as n.
+  revert u p v H_valid Heqn.
+  induction n using lt_wf_ind; intros u p v H_valid Heqn.
+  destruct (classic (NoDup p)).
+  - exists p. split; auto.
+  - apply Nodup_exists_repetition in H0.
+    destruct H0 as [e [l1 [l2 [l3 H_eq]]]].
+    subst p.
+    pose proof (@valid_epath_shorten_cycle step_aux_unique_undirected g u v l1 e l2 l3 H_valid) as [q [H_valid_q H_len_q]].
+    apply (H (length q)) in H_valid_q; auto.
+    lia.
+Qed.
 
 
 (* 我们也可以基于epath而不是path进行最短路径的定义和证明。 *)
@@ -401,6 +435,7 @@ Definition is_epath_through_exactly_vset
     valid_epath g x p1 v /\ 
     valid_epath g v p2 x. 
 
+Local Open Scope Z.
 (* vset是path中间节点可以经过的节点集合，但是这个定义相比Path上的定义比较抽象 *)
 Definition is_epath_through_vset
   (g: G) (u: V) (p: list E) (v: V) (vset: V -> Prop): Prop :=

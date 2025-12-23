@@ -64,18 +64,5 @@ Proof.
   lia.
 Qed.
 
-Definition is_simple_path (g: G) (p: P) (u v: V): Prop :=
-  is_path g p u v /\ NoDup (vertex_in_path p). 
-
-Lemma path_simplfier: forall g p u v,
-  is_path g p u v ->
-  exists q, is_simple_path g q u v.
-Proof.
-  intros.
-  destruct H as [Hpath Hnodup].
-  unfold is_simple_path. 
-Admitted.
-
-
 
 End path.

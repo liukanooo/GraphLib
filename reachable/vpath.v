@@ -8,7 +8,7 @@ Require Import Coq.micromega.Psatz.
 Require Import SetsClass.SetsClass.
 Require Import ListLib.Base.Positional.
 From GraphLib Require Import GraphLib path path_basic.
-From ListLib Require Import Base.Inductive.
+From ListLib Require Import Base.Inductive General.NoDup.
 
 Import SetsNotation.
 
@@ -241,11 +241,11 @@ Qed.
 Lemma valid_vpath_cons_inv:
   forall g u p v,
   valid_vpath g u (u :: p) v ->
-  p = nil \/ exists w, step g u w /\ valid_vpath g w p v.
+  (p = nil /\ u = v) \/ exists w, step g u w /\ valid_vpath g w p v.
 Proof.
   intros. 
   apply valid_vpath_inv_1n in H as [(-> & ?) | (w & p' & ? & ? & ?)]. 
-  - left; inversion H; reflexivity.
+  - left; inversion H; tauto.
   - right; exists w. 
     inversion H; subst. 
     split; auto.
@@ -313,7 +313,7 @@ Proof.
 Qed.
 
 (* vpath上对list V的1n归纳法则 *)
-Lemma valid_vpath_ind_1n:
+Theorem valid_vpath_ind_1n:
   forall g (P : V -> list V -> V -> Prop),
   (forall v, P v (v :: nil) v) ->
   (forall u v p w,
@@ -337,7 +337,7 @@ Proof.
 Qed.
 
 (* vpath上对list V的n1归纳法则 *)
-Lemma valid_vpath_ind_n1:
+Theorem valid_vpath_ind_n1:
   forall g (P : V -> list V -> V -> Prop),
   (forall v, P v (v :: nil) v) ->
   (forall u p v w,
@@ -445,6 +445,56 @@ Proof.
   - exists (v :: nil). apply valid_vpath_empty.
   - destruct IHrt as (p & ?).
     exists (u :: p). eapply valid_vpath_cons; eauto.
+Qed.
+
+(* vpath上的简单路径：不经过重复顶点 *)
+Definition is_simple_vpath (g: G) (u: V) (p: list V) (v: V): Prop :=
+  valid_vpath g u p v /\ NoDup p.
+
+(* 移除vpath中的环 *)
+Lemma valid_vpath_remove_cycle: 
+  forall g u v l1 x l2 l3,
+  valid_vpath g u (l1 ++ x :: l2 ++ x :: l3) v ->
+  valid_vpath g u (l1 ++ x :: l3) v.
+Proof.
+  intros.
+  rewrite app_comm_cons in H.
+  rewrite app_assoc in H. 
+  apply valid_vpath_app_inv in H as [H_first_part H_tail].
+  rewrite <- !app_assoc in H_first_part. 
+  rewrite <- app_comm_cons in H_first_part.
+  apply valid_vpath_app_inv in H_first_part.
+  destruct H_first_part as [H_head _]. 
+  pose proof (valid_vpath_app g u (l1 ++ x :: nil) x (x :: l3) v H_head H_tail).
+  simpl in H. 
+  rewrite <- app_assoc in H. 
+  exact H.
+Qed.
+
+(* 任意两点之间的vpath能够被转换为简单的vpath *)
+Theorem valid_vpath_simple:
+  forall g u p v,
+  valid_vpath g u p v ->
+  exists q, is_simple_vpath g u q v.
+Proof.
+  intros g u p v H_valid.
+  remember (length p) as n.
+  revert u p v H_valid Heqn.
+  induction n using lt_wf_ind; intros u p v H_valid Heqn.
+  destruct (classic (NoDup p)).
+  - exists p. split; auto.
+  - apply Nodup_exists_repetition in H0.
+    destruct H0 as [x [l1 [l2 [l3 H_eq]]]].
+    subst p.
+    set (p' := l1 ++ x :: l3).
+    assert (H_valid_p': valid_vpath g u p' v).
+    { unfold p'. eapply valid_vpath_remove_cycle. eassumption. }
+    assert (H_len: length p' < length (l1 ++ x :: l2 ++ x :: l3)). {
+      unfold p'.
+      rewrite !length_app; simpl.
+      rewrite !length_app; simpl.
+      lia. }
+    apply (H (length p')) in H_valid_p'; auto; lia.
 Qed.
 
 End VPATH.
