@@ -7,7 +7,7 @@ Require Import Coq.Logic.Classical_Prop.
 Require Import Coq.micromega.Psatz.
 Require Import SetsClass.SetsClass.
 Require Import ListLib.Base.Positional.
-From GraphLib Require Import GraphLib path path_basic.
+From GraphLib Require Import graph_basic reachable_basic path path_basic Zweight.
 From ListLib Require Import Base.Inductive.
 
 Import SetsNotation.

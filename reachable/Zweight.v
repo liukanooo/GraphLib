@@ -6,7 +6,7 @@ Require Import Coq.Arith.Wf_nat.
 Require Import Coq.Logic.Classical_Prop.
 Require Import Coq.micromega.Psatz.
 Require Import SetsClass.SetsClass.
-From GraphLib Require Import GraphLib path path_basic.
+From GraphLib Require Import graph_basic path path_basic.
 From MaxMinLib Require Import MaxMin Interface. 
 
 Local Open Scope Z.

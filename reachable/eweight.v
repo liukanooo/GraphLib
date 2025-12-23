@@ -56,10 +56,7 @@ Context {G V E: Type}
         {pg: Graph G V E} 
         {gv: GValid G}
         {ew: EdgeWeight G E W}
-        {path: Path G V E P}
-        {emptypath: EmptyPath G V E P path}
-        {singlepath: SinglePath G V E P path}
-        {concatpath: ConcatPath G V E P path}.
+        {path: Path G V E P}.
 
 Parameter Wlist_sum: list W -> W.
 
