@@ -51,6 +51,9 @@ Definition is_path_through_vset
 
 (* 路径的事实上的中间节点可以直接用interior函数得到 *)
 
+Definition is_simple_path (g: G) (p: P) (u v: V): Prop :=
+  is_path g p u v /\ NoDup (vertex_in_path p).
+
 (* 所有的路径顶点集合都不为空 *)
 Lemma path_valid_vertex_not_nil: forall g p,
   path_valid g p ->

@@ -25,7 +25,7 @@ Class Tree
     {path: Path G V E A}:=
 {
   tree_connected: forall g, gvalid g -> connected g;
-  tree_no_curcuit: forall g, gvalid g -> ~ have_simple_circuit g;
+  tree_no_curcuit: forall g, gvalid g -> ~ exists u p, is_simple_epath g u p u;
 }.
 
 
@@ -95,24 +95,6 @@ Proof.
       { simpl in H6. admit. }
 Admitted.
 
-Lemma tree_have_simple_path: 
-  forall u v,
-  vvalid g u ->
-  vvalid g v ->
-  exists p, simple_epath g u p v.
-Proof.
-  intros.
-  pose proof (tree_have_path u v H H0) as [p Hp].
-  eapply path_simplfier; eauto. 
-Admitted.
-
-
-Lemma tree_add_edge_have_simple_circuit: 
-  forall g' u v e,
-  addEdgeUndirected g g' u v e ->
-  exists w p, simple_circuit g' p w.
-Proof.
-Admitted.
 
 End TREE.
 
