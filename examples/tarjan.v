@@ -531,8 +531,6 @@ Proof.
   Unshelve. auto. auto. auto. auto.
 Qed.
 
-(* todo: clear "unfold ge"; created and use MaxMin composed rule *)
-
 Lemma low_valid_induction (v: V) (fun_low: V -> nat)
   (IHv: forall w, son v w -> is_low_v w (fun_low w)): 
   min_value_of_subset Nat.le (son v) fun_low == 
