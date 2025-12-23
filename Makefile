@@ -7,12 +7,10 @@ COQDEP=$(COQBIN)coqdep$(EXESUF)
 
 COQ_FLAG = -Q $(CURRENT_DIR) GraphLib \
            -R ../sets SetsClass \
-           -R ../algorithms Algorithms \
 		   -R ../MaxMinLib MaxMinLib \
 		   -R ../ListLib ListLib
 DEP_FLAG = -Q $(CURRENT_DIR) GraphLib \
            -R ../sets SetsClass \
-           -R ../algorithms Algorithms \
 		   -R ../MaxMinLib MaxMinLib \
 		   -R ../ListLib ListLib
 
@@ -22,10 +20,10 @@ reachable/reachable_basic.v reachable/reachable_restricted.v \
 reachable/path_basic.v reachable/path.v \
 reachable/vpath.v reachable/epath.v \
 reachable/Zweight.v reachable/eweight.v
-DIRECTED_FILES = directed/rootedtree.v 
+DIRECTED_FILES = directed/rootedtree.v directed/dfstree.v
 SUBGRAPH_FILES = subgraph/subgraph.v
 UNDIRECTED_FILES = undirected/undirected_basic.v undirected/tree.v
-EXAMPLES_FILES = examples/floyd.v examples/dijkstra.v examples/prim.v examples/kruskal.v
+EXAMPLES_FILES = examples/floyd.v examples/dijkstra.v examples/prim.v examples/kruskal.v examples/tarjan.v
 
 FILES = \
  $(BASE_FILES) \
