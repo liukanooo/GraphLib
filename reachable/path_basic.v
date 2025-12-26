@@ -23,18 +23,6 @@ Context {G V E: Type}
         {singlepath: SinglePath G V E P path}
         {concatpath: ConcatPath G V E P path}. 
 
-Lemma empty_path_edge: forall (g: G) v,
-  edge_in_path (empty_path v) = nil. 
-Proof.
-  intros. 
-  pose proof (vpath_iff_epath g (empty_path v) (empty_path_valid g v)) as [Hlen _].
-  rewrite empty_path_vertex in Hlen.
-  simpl in Hlen.
-  assert (length (edge_in_path (empty_path v)) = 0%nat) by lia.
-  rewrite length_zero_iff_nil in H. 
-  auto.
-Qed.
-
 Definition is_path (g: G) (p: P) (u v: V): Prop :=
   path_valid g p /\ head p = u /\ tail p = v.
 
@@ -53,19 +41,5 @@ Definition is_path_through_vset
 
 Definition is_simple_path (g: G) (p: P) (u v: V): Prop :=
   is_path g p u v /\ NoDup (vertex_in_path p).
-
-(* 所有的路径顶点集合都不为空 *)
-Lemma path_valid_vertex_not_nil: forall g p,
-  path_valid g p ->
-  vertex_in_path p <> nil.
-Proof.
-  intros.
-  pose proof vpath_iff_epath g p H. 
-  destruct H0 as [contra _]. 
-  unfold not; intros; rewrite H0 in contra. 
-  simpl in contra. 
-  lia.
-Qed.
-
 
 End path.
