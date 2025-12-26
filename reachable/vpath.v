@@ -188,7 +188,8 @@ Lemma valid_vpath_inv_1n:
 Proof.
   intros g u p v [Pp [Hvalid [Hvert [Hhd Htl]]]].
   pose proof (destruct_1n_spec g Pp Hvalid) as Hspec.
-  destruct (destruct_1n_path Pp).
+  destruct (destruct_1n_path g Pp Hvalid) eqn: ?; 
+  unfold path_cons_spec in *.
   - (* Case: Base Path *)
     subst Pp.
     rewrite empty_path_vertex in *.
@@ -496,6 +497,56 @@ Proof.
       lia. }
     apply (H (length p')) in H_valid_p'; auto; lia.
 Qed.
+
+(* 这里先尝试一下两种through vset的定义是否等价，然后再测试一下是否好用。 *)
+(* vset就等于path去掉首尾后的所有点的集合 *)
+Definition is_vpath_through_exactly_vset 
+  (g: G) (u: V) (p: list V) (v: V) (vset: V -> Prop): Prop :=
+  valid_vpath g u p v /\ 
+  forall x, x ∈ vset <-> 
+  exists p1 p2, 
+    valid_vpath g u (u :: p1 ++ x :: nil) x /\ 
+    valid_vpath g x (x :: p2 ++ v :: nil) v /\ 
+    (u :: p1) ++ x :: (p2 ++ v :: nil) = p . 
+
+Theorem is_vpath_through_exactly_vset_correct: 
+  forall g u p v, 
+  valid_vpath g u p v ->
+  is_vpath_through_exactly_vset g u p v (fun x => In x (removelast (tl p))).
+Proof.
+  intros; split; [auto|split; intros]. 
+  - destruct p. 
+    1:{ exfalso. exact H0. } 
+    simpl in H0.
+    destruct (list_snoc_destruct p) as [|[? []]]; subst. 
+    1:{ exfalso. exact H0. } 
+    rewrite removelast_last in H0.  
+    apply in_split in H0 as [l1 [l2 H0]]; subst. 
+    assert (u = v0) by 
+    (apply valid_vpath_start in H as [? Heq]; inversion Heq; reflexivity); subst v0.  
+    assert (v = x0) by  
+    (apply valid_vpath_end in H as [? Heq]; 
+    rewrite app_comm_cons in Heq;
+    apply app_inj_tail_iff in Heq as []; auto); subst x0. 
+
+    rewrite <- app_assoc in H.
+    rewrite app_comm_cons in H. 
+     
+    exists l1, l2; repeat split.
+
+    * apply valid_vpath_app_inv in H as [? _]; auto. 
+    * apply valid_vpath_app_inv in H as [_ ?]; auto. 
+    * simpl; rewrite <- !app_assoc. 
+      rewrite <- !app_comm_cons.  
+      reflexivity. 
+  - destruct H0 as [p1 [p2 [Hp1 [Hp2 Heq]]]]; subst. 
+    simpl; rewrite app_comm_cons. 
+    rewrite app_assoc. 
+    rewrite removelast_last. 
+    apply in_or_app; right. 
+    apply in_eq.
+Qed.
+    
 
 End VPATH.
 

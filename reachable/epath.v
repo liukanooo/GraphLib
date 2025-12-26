@@ -2,6 +2,7 @@ Require Import Coq.Lists.List.
 Require Import Coq.Classes.Morphisms.
 Require Import Coq.ZArith.ZArith.
 Require Import Coq.Logic.Classical_Prop.
+Require Import Coq.Arith.Wf_nat.
 Require Import Coq.micromega.Psatz.
 Require Import SetsClass.SetsClass.
 From GraphLib Require Import graph_basic reachable_basic path path_basic Zweight.
@@ -32,8 +33,8 @@ Definition valid_epath:
   fun g u p v => exists P: P, 
     path_valid g P /\ 
     edge_in_path P = p /\ 
-    hd_error (vertex_in_path P) = Some u /\ 
-    tl_error (vertex_in_path P)= Some v.
+    head P = u /\ 
+    tail P = v.
 
 
 (* empty_path能构造出平凡的epath *)
@@ -45,9 +46,12 @@ Proof.
   exists (empty_path v).
   assert (path_valid g (empty_path v)) by (apply empty_path_valid).
   split; [auto|].
-  split.
+  split; [|split]; auto.
   - apply (empty_path_edge g).
-  - rewrite empty_path_vertex. simpl. auto.
+  - apply Some_inversion. erewrite head_valid; eauto. 
+    rewrite empty_path_vertex. simpl. auto.
+  - apply Some_inversion. erewrite tail_valid; eauto. 
+    rewrite empty_path_vertex. simpl. auto.
 Qed.
 
 (* nil的epath对应 (empty_path v) *)
@@ -58,6 +62,9 @@ Lemma valid_epath_nil_inv:
 Proof.
   intros.
   destruct H as [path_obj [H_pval [H_edges [H_hd H_tl]]]].
+  apply Some_injection in H_hd, H_tl.
+  erewrite head_valid in H_hd; eauto.
+  erewrite tail_valid in H_tl; eauto.
   pose proof (vpath_iff_epath g path_obj H_pval) as [Hlen _].
   rewrite H_edges in Hlen. simpl in Hlen.
   destruct (vertex_in_path path_obj) as [| x [| y l]].
@@ -74,11 +81,13 @@ Lemma valid_epath_single: forall g u v e,
   valid_epath g u (e :: nil) v.
 Proof.
   intros.
-  unfold valid_epath.
-  exists (single_path u v e). split; [apply single_path_valid; auto|].
-  split; [apply single_path_edge|].
-  split; [rewrite single_path_vertex; simpl; auto|].
-  rewrite single_path_vertex; simpl; auto.
+  unfold valid_epath. 
+  assert (Hvalid: path_valid g (single_path u v e)) by (apply single_path_valid; auto).
+  exists (single_path u v e). split; [auto|].
+  split; [|split]; auto.
+  - rewrite single_path_edge. reflexivity.
+  - apply Some_inversion. erewrite head_valid; eauto. rewrite single_path_vertex; simpl; auto.
+  - apply Some_inversion. erewrite tail_valid; eauto. rewrite single_path_vertex; simpl; auto.
 Qed.
 
 (* epath的singleton对应一个step关系 *)
@@ -91,10 +100,11 @@ Proof.
   destruct H as [p [Hp [Hedge [Hhd Htl]]]]. 
   pose proof (vpath_iff_epath g p Hp) as [Hlen Hstep]. 
   rewrite Hedge in Hlen; simpl in Hlen. 
+  apply Some_injection in Hhd. erewrite head_valid in Hhd; eauto. 
+  apply Some_injection in Htl. erewrite tail_valid in Htl; eauto. 
   rewrite <- nth_error_O in Hhd. 
-  unfold tl_error in Htl; rewrite Hlen in Htl.  
-  pose proof Hstep g 0%nat u v e ltac:(rewrite Hedge; simpl; lia)
-  ltac:(rewrite Hedge; simpl; auto) Hhd Htl. 
+  unfold tl_error in Htl; rewrite Hlen in Htl.
+  pose proof Hstep g 0%nat u v e ltac:(rewrite Hedge; simpl; lia) ltac:(rewrite Hedge; simpl; auto) Hhd Htl. 
   apply H.
 Qed.
 
@@ -109,7 +119,11 @@ Lemma valid_epath_app:
 Proof.
   intros.
   destruct H as [P1 [Hp1 [Hedge1 [Hhd1 Htl1]]]].
-  destruct H0 as [P2 [Hp2 [Hedge2 [Hhd2 Htl2]]]].
+  destruct H0 as [P2 [Hp2 [Hedge2 [Hhd2 Htl2]]]]. 
+
+  apply Some_injection in Hhd1, Hhd2, Htl1, Htl2.
+  erewrite head_valid in Hhd1, Hhd2; eauto.
+  erewrite tail_valid in Htl1, Htl2; eauto.
   
   exists (concat_path P1 P2).
   
@@ -123,9 +137,11 @@ Proof.
   assert (Hvalid: path_valid g (concat_path P1 P2)) by (apply concat_path_valid; auto).
   split; [|split; [|split]]; auto.
   - rewrite concat_path_edge. rewrite Hedge1, Hedge2. reflexivity.
-  - rewrite concat_path_vertex.
+  - apply Some_inversion. erewrite head_valid; eauto. 
+    rewrite concat_path_vertex.
     destruct (vertex_in_path P1); [discriminate|simpl; auto].
-  - rewrite concat_path_vertex.
+  - apply Some_inversion. erewrite tail_valid; eauto. 
+    rewrite concat_path_vertex.
     destruct (vertex_in_path P2); [discriminate|simpl in *; auto].
     destruct (list_snoc_destruct l); [subst; simpl in *|].
     * unfold tl_error in Htl2; simpl in Htl2. 
@@ -146,9 +162,13 @@ Lemma valid_epath_cons_inv:
   exists v, step_aux g e u v /\ valid_epath g v p w.
 Proof. 
   intros.
-  destruct H as [p0 [Hp [Hedge [Hhd Htl]]]].
+  destruct H as [p0 [Hp [Hedge [Hhd Htl]]]]. 
+  apply Some_injection in Hhd, Htl.
+  erewrite head_valid in Hhd; eauto.
+  erewrite tail_valid in Htl; eauto.
   pose proof (destruct_1n_spec g p0 Hp).
-  destruct (destruct_1n_path p0).
+  destruct (destruct_1n_path g p0 Hp) eqn: ?;
+  unfold path_cons_spec in *.
   - (* Base Case: P implies empty edges *)
     subst. rewrite (empty_path_edge g) in Hedge. discriminate.
   - (* Step Case *)
@@ -164,26 +184,26 @@ Proof.
 
     exists (head p1). split; auto.
     
-    exists p1. split; [|split; [|split]]; auto.
-    + erewrite head_valid; eauto.
-    + rewrite concat_path_vertex in Htl.
-      rewrite single_path_vertex in Htl.
-      destruct (vertex_in_path p1) eqn:Hvpath.
-      * eapply path_valid_vertex_not_nil in Hp'; congruence.
-      * simpl in Htl. 
-        destruct (list_snoc_destruct l); [subst; simpl in *|].
-        { unfold tl_error in Htl; simpl in Htl.
-          unfold tl_error; simpl.
-          erewrite head_valid in Htl; eauto. 
-          rewrite Hvpath in Htl; simpl in Htl. 
-          auto. }
-        { destruct H as [? []]; subst. 
-          rewrite app_comm_cons.
-          rewrite tl_error_last.
-          simpl in Htl. 
-          rewrite! app_comm_cons in Htl.
-          rewrite tl_error_last in Htl.
-          auto. }
+    exists p1. split; [|split; [|split]]; auto. 
+    apply Some_inversion. erewrite tail_valid; eauto.
+    rewrite concat_path_vertex in Htl.
+    rewrite single_path_vertex in Htl.
+    destruct (vertex_in_path p1) eqn:Hvpath.
+    * eapply path_valid_vertex_not_nil in Hp'; congruence.
+    * simpl in Htl. 
+      destruct (list_snoc_destruct l); [subst; simpl in *|].
+      + unfold tl_error in Htl; simpl in Htl.
+        unfold tl_error; simpl.
+        erewrite head_valid in Htl; eauto. 
+        rewrite Hvpath in Htl; simpl in Htl. 
+        auto.
+      + destruct H as [? []]; subst. 
+        rewrite app_comm_cons.
+        rewrite tl_error_last.
+        simpl in Htl. 
+        rewrite! app_comm_cons in Htl.
+        rewrite tl_error_last in Htl.
+        auto.
 Qed.
 
 (* ++构成的epath能够被拆散 *)
@@ -397,6 +417,7 @@ Qed.
 (* 任意两点之间的epath能够被转换为简单的epath *)
 (* 前提：给出无向图或有向图的step_aux的type class *)
 (* 这也提示出step_aux或许处于一个不正确的位置 *)
+(* 一个由起点和边能确定终点的前提是不够的。因为我们在epath上面不能获取起点相同的条件。 *)
 Theorem valid_epath_simple 
 {step_aux_unique_undirected: forall g e x1 y1 x2 y2, step_aux g e x1 y1 -> step_aux g e x2 y2 -> 
   (x1 = x2 /\ y1 = y2) \/ (x1 = y2 /\ x2 = y1)}:
@@ -413,15 +434,23 @@ Proof.
   - apply Nodup_exists_repetition in H0.
     destruct H0 as [e [l1 [l2 [l3 H_eq]]]].
     subst p.
-    pose proof (@valid_epath_shorten_cycle step_aux_unique_undirected g u v l1 e l2 l3 H_valid) as [q [H_valid_q H_len_q]].
+    pose proof (@valid_epath_shorten_cycle step_aux_unique_undirected g u v l1 e l2 l3 H_valid) 
+    as [q [H_valid_q H_len_q]].
     apply (H (length q)) in H_valid_q; auto.
     lia.
 Qed.
 
-
-(* 我们也可以基于epath而不是path进行最短路径的定义和证明。 *)
-
-Context {ew: EdgeWeight G E}.
+(* gvalid需要再处理一下 *)
+Theorem valid_epath_simple_directed
+  `{StepUniqueDirected G V E}:
+  forall g u p v,
+  valid_epath g u p v ->
+  exists q, is_simple_epath g u q v.
+Proof.
+  intros g u p v H_valid. 
+  eapply valid_epath_simple; eauto.
+  Unshelve. intros. 
+Admitted.
 
 (* vset就等于path去掉首尾后的所有点的集合 *)
 Definition is_epath_through_exactly_vset 
@@ -429,17 +458,115 @@ Definition is_epath_through_exactly_vset
   valid_epath g u p v /\ 
   forall x, x ∈ vset <-> 
   exists p1 p2, 
-    p1 <> nil /\ 
-    p2 <> nil /\ 
-    p1 ++ p2 = p /\ 
-    valid_epath g x p1 v /\ 
-    valid_epath g v p2 x. 
+    p1 <> nil /\ (* 去掉头 *)
+    p2 <> nil /\ (* 去掉尾 *) 
+    valid_epath g u p1 x /\ 
+    valid_epath g x p2 v /\ 
+    p1 ++ p2 = p . 
+
+Definition is_epath_through_vset
+  (g: G) (u: V) (p: list E) (v: V) (S: V -> Prop) : Prop :=
+  valid_epath g u p v /\ 
+  forall (p1 p2: list E) (x: V),
+    p1 <> nil ->       (* p1 非空，说明 x 不是起点 u *)
+    p2 <> nil ->       (* p2 非空，说明 x 不是终点 v *)
+    p = p1 ++ p2 ->    (* x 是切分点 *)
+    valid_epath g u p1 x -> (* x 是 p1 的终点 *)
+    x ∈ S.           (* 结论：中间点 x 必须在 S 中 *)
+
+(* 空路径（u 到 u）总是满足任意 S *)
+Lemma is_epath_through_vset_nil: 
+  forall g u S,
+    is_epath_through_vset g u nil u S.
+Proof.
+  intros. split.
+  - apply valid_epath_empty.
+  - intros. destruct p1; simpl in *; try congruence.
+Qed.
+
+(* 单条边（u 到 v）总是满足任意 S *)
+Lemma is_epath_through_vset_single: 
+  forall g u v e S,
+    step_aux g e u v ->
+    is_epath_through_vset g u (e :: nil) v S.
+Proof.
+  intros. split.
+  - apply valid_epath_single; auto.
+  - intros p1 p2 x Hp1 Hp2 Hp Hvalid. 
+    destruct p1; [congruence|]. 
+    inversion Hp; subst. 
+    symmetry in H2; apply app_eq_nil in H2 as []; subst. 
+    congruence. 
+Qed.
+
+(* 相同起点同一路径的终点是唯一的；这一性质同时存在于有向图于无向图之中 *)
+Context {step_aux_unique_end: forall g u e v1 v2, 
+  step_aux g e u v1 -> step_aux g e u v2 -> v1 = v2}. 
+
+Theorem valid_epath_unique_end:
+  forall g u p v1 v2, 
+    valid_epath g u p v1 -> 
+    valid_epath g u p v2 -> 
+    v1 = v2.
+Proof.
+  intros. 
+  revert u v1 v2 H H0. 
+  induction p. 
+  - intros. 
+    apply valid_epath_nil_inv in H, H0. 
+    subst; reflexivity. 
+  - intros. 
+    apply valid_epath_cons_inv in H, H0. 
+    destruct H as [v [Hstep Hvalid]]. 
+    destruct H0 as [v' [Hstep' Hvalid']]. 
+    assert (v = v') by (eapply step_aux_unique_end; eauto); subst v'.
+    eapply IHp; eauto.
+Qed.
+
+Lemma is_epath_through_vset_app: 
+  forall g u p1 m p2 v S,
+    is_epath_through_vset g u p1 m S ->
+    is_epath_through_vset g m p2 v S ->
+    m ∈ S -> 
+    is_epath_through_vset g u (p1 ++ p2) v S.
+Proof.
+  intros g u p1 m p2 v S 
+  [Hvalid1 Hp1] [Hvalid2 Hp2] Hm; split.
+  - eapply valid_epath_app; eauto.
+  - intros q1 q2 x Hq1 Hq2 Hq Hvalid. 
+    apply app_eq_app in Hq as [[n [Hpre Hpost]]|[n [Hpost Hpre]]].
+    + assert (Hn: n = nil \/ n <> nil) by tauto; destruct Hn. 
+      * subst. rewrite app_nil_r in Hvalid1. 
+        assert (x = m) by (eapply valid_epath_unique_end; eauto); subst x.
+        subst; auto. 
+      * eapply (Hp1 q1 n); eauto.
+    + assert (Hn: n = nil \/ n <> nil) by tauto; destruct Hn.
+      * subst. rewrite app_nil_r in Hvalid.
+        assert (x = m) by (eapply valid_epath_unique_end; eauto); subst x.
+        subst; auto.
+      * subst; eapply (Hp2 n q2); eauto. 
+        eapply valid_epath_app_inv in Hvalid as [? [? ?]]. 
+        assert (x0 = m) by (eapply valid_epath_unique_end; eauto); subst x0.
+        auto.
+Qed.
+
+Theorem is_epath_through_vset_split_by_vertex: 
+  forall g u p v S (k: V),
+  is_epath_through_vset g u p v (S ∪ [k]) ->
+  is_epath_through_vset g u p v S \/ 
+  exists p_pre p_suf,
+    is_epath_through_vset g u p_pre k S /\ 
+    is_epath_through_vset g k p_suf v S. 
+Proof. 
+Admitted.
+
+
+(* 我们也可以基于epath而不是path进行最短路径的定义和证明。 *)
+
+Context {ew: EdgeWeight G E}.
+
 
 Local Open Scope Z.
-(* vset是path中间节点可以经过的节点集合，但是这个定义相比Path上的定义比较抽象 *)
-Definition is_epath_through_vset
-  (g: G) (u: V) (p: list E) (v: V) (vset: V -> Prop): Prop :=
-  forall S, is_epath_through_exactly_vset g u p v S -> vset ⊆ S. 
 
 Definition epath_weight (g: G) (p: list E): option Z :=
   fold_right Z_op_plus (Some 0) (map (weight g) p). 
