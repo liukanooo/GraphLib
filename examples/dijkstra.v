@@ -6,6 +6,7 @@ Require Import Coq.micromega.Psatz.
 Require Import SetsClass.SetsClass.
 From GraphLib Require Import graph_basic reachable_basic path path_basic epath Zweight.
 From MaxMinLib Require Import MaxMin Interface.
+From ListLib Require Import Base.Inductive.
 
 Import SetsNotation.
 
@@ -100,7 +101,7 @@ Qed.
 
 (** ===== 1. 初始化性质 ===== *)
 
-(** 引理4:
+(** 引理4: (初始状态)
   对于源点 src：
   - dist[src] = 0，且这是真正的最短距离（假设无负环，这由非负权重保证）
 *)
@@ -131,14 +132,36 @@ Proof.
     apply H. 
 Qed.
 
-(** 引理5:
+(** 引理5: (初始状态)
   对于其他顶点 v ≠ src，初始状态下通过空集不可达
 *)
 Lemma init_dist_others_unreachable: forall (v: V),
   v <> src ->
   min_weight_distance_in_vset g src v ∅ None.
+Proof. 
+  intros. 
+  unfold min_weight_distance_in_vset. 
+  right; split; [intros p Hp; exfalso|reflexivity]. 
+  destruct Hp as [Hpath Hbody].
+  destruct Hpath as [Hvalid [Hhd Htl]]. 
+  unfold interior in Hbody. 
+  destruct (vertex_in_path p) eqn:Heq. 
+  - eapply path_valid_vertex_not_nil; eauto. 
+  - simpl in Hbody. 
+    destruct l. 
+    * subst. 
+      apply H. 
+      apply Some_inversion. 
+      erewrite head_valid; eauto.
+      erewrite tail_valid; eauto. 
+      rewrite Heq. 
+      reflexivity. 
+    * subst. 
+      destruct l. 
+      + simpl in Hbody. 
+      Print removelast.  
+      simpl in Hbody. 
 Admitted.
-
 
 (** ===== 2. 路径结构引理 (关键分解) ===== *)
 
@@ -169,6 +192,26 @@ Lemma path_first_exit_decomposition:
       is_path_through_vset g p_pre src x visited /\  (* p_pre 中间点在 visited 中 *)
       x ∈ visited /\
       ~ y ∈ visited. (* y 是第一个未访问点 *)
+Admitted.
+
+(** ===== 辅助工具 ===== *)
+
+(** 三角不等式 (用于通用的距离性质推导) *)
+Lemma triangle_inequality:
+  forall (u v w: V) (d_uw d_uv d_vw: option Z),
+    min_weight_distance g u w d_uw ->
+    min_weight_distance g u v d_uv ->
+    min_weight_distance g v w d_vw ->
+    Z_op_le d_uw (Z_op_plus d_uv d_vw).
+Admitted.
+
+(** 集合单调性 *)
+Lemma min_distance_vset_monotone:
+  forall (u v: V) (vset1 vset2: V -> Prop) (d1 d2: option Z),
+    min_weight_distance_in_vset g u v vset1 d1 ->
+    min_weight_distance_in_vset g u v vset2 d2 ->
+    vset1 ⊆ vset2 ->
+    Z_op_le d2 d1.
 Admitted.
 
 
@@ -275,25 +318,5 @@ Proof.
   *)
 Admitted.
 
-
-(** ===== 6. 辅助工具引理 ===== *)
-
-(** 三角不等式 (用于通用的距离性质推导) *)
-Lemma triangle_inequality:
-  forall (u v w: V) (d_uw d_uv d_vw: option Z),
-    min_weight_distance g u w d_uw ->
-    min_weight_distance g u v d_uv ->
-    min_weight_distance g v w d_vw ->
-    Z_op_le d_uw (Z_op_plus d_uv d_vw).
-Admitted.
-
-(** 集合单调性 *)
-Lemma min_distance_vset_monotone:
-  forall (u v: V) (vset1 vset2: V -> Prop) (d1 d2: option Z),
-    min_weight_distance_in_vset g u v vset1 d1 ->
-    min_weight_distance_in_vset g u v vset2 d2 ->
-    vset1 ⊆ vset2 ->
-    Z_op_le d2 d1.
-Admitted.
 
 End dijkstra.

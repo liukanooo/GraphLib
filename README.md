@@ -159,7 +159,7 @@ Class ConcatPath := {
 
 ```coq
 Class Destruct1nPath := {
-  destruct_1n_path: P -> path_destruct_1n;
+  destruct_1n_path: P -> PathConsView;
   destruct_1n_spec: forall g p, path_valid g p ->
     match destruct_1n_path p with
     | DestructBase1n v => 
@@ -210,7 +210,7 @@ Class PathInd1n := {
 
 ```coq
 Class Destructn1Path := {
-  destruct_n1_path: P -> path_destruct_n1;
+  destruct_n1_path: P -> PathSnocView;
   destruct_n1_spec: forall g p, path_valid g p ->
     match destruct_n1_path p with
     | DestructBasen1 p' v =>
