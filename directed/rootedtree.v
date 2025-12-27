@@ -252,6 +252,33 @@ Proof.
   destruct H2; subst.
   - exfalso; apply H1; auto.
   - reflexivity.
+Qed. 
+
+Lemma step_subtree_pair: 
+  forall w x y z,
+    step g z w ->
+    offspring g x w ->
+    step g y x ->
+    offspring g z y ->
+    w = x /\ y = z.
+Proof.
+  intros w x y z H_son_wz H_sub_wx H_son_xy H_sub_yz.
+  assert (H_off_zx: offspring g z x). { etransitivity.
+    - apply H_sub_yz.
+    - apply step_rt; auto. }
+  pose proof (step_minimal z w x H_son_wz H_off_zx H_sub_wx) as [H_eq | H_eq].
+  - subst x.
+    exfalso.
+    eapply offspring_not_father.
+    + apply H_sub_yz.
+    + apply H_son_xy.
+
+  - subst x.
+    split; auto.
+    symmetry.
+    eapply father_vunique.
+    + apply H_son_wz.
+    + apply H_son_xy.
 Qed.
 
 Lemma nearest_coancester_exist': forall x y z,
