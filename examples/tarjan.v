@@ -268,7 +268,197 @@ Context {nocross: no_cross_edge}
         {reacheable_is_visited: reachable_visited}.
 
 
-Section LOW.
+Section LOW. 
+
+(* Definition step_without_tree (x y: V): Prop := 
+  exists e, step_aux dfstree e x y /\ ~ evalid dfstree e.
+
+Definition subtree_step (y: V): (V -> Prop) := 
+  fun w => exists z, 
+    subtree y z /\ step_without_tree z w. 
+
+Definition low_tree (y: V) : V -> Prop := subtree y ∪ subtree_step y.
+
+(* v的low值满足定义 *)
+Definition is_low_v (v: V): nat -> Prop :=
+  fun lowv => 
+    min_value_of_subset Nat.le (low_tree v) dfn lowv.
+
+Definition is_low (fun_low: V -> nat): Prop :=
+  forall v, vvalid dfstree v -> is_low_v v (fun_low v). 
+
+(* 函数fun_low在v上满足local性质 *)
+Definition low_valid_v (v: V) (fun_low: V -> nat): Prop :=
+  min_value_of_subset Nat.le
+  (min_value_of_subset Nat.le (son v) fun_low ∪ 
+  min_value_of_subset Nat.le (step_without_tree v ∪ [v]) dfn)
+  id (fun_low v).
+
+
+Definition low_valid (fun_low: V -> nat): Prop := 
+  forall v, vvalid dfstree v -> low_valid_v v fun_low.
+
+
+Lemma reachable_subtree:
+  forall u, reachable g theroot u -> subtree theroot u.
+Proof.
+  intros.
+  apply reacheable_is_visited in H.
+  destruct (classic (theroot = u)) as [|neq_root].
+  - subst; reflexivity.
+  - eapply root_is_root in H; eauto.
+Qed.
+
+Lemma leaf_subree (u: V):
+  isleaf dfstree u ->
+  subtree u == [u].
+Proof.
+  intros.
+  split; intros.
+  - destruct (classic (u = a)); auto.
+  eapply real_offspring in H0; eauto.
+  destruct H0 as [z []].
+  exfalso; eapply H; eauto.
+  - sets_unfold in H0; subst.
+  reflexivity.
+  Unshelve. auto.
+Qed.
+
+Lemma subtree_decompose (u: V): 
+  subtree u ==  
+  [u] ∪ 
+  (fun w => exists z, son u z /\ subtree z w).
+Proof. 
+  split; intros. 
+  - destruct (classic (u = a)). 
+    * subst; left; reflexivity. 
+    * eapply real_offspring in H0 as [? []]; eauto . 
+      right; exists x; auto. 
+  - destruct H as [|[? []]].
+    * sets_unfold in H; subst; reflexivity. 
+    * eapply step_reachable_reachable; eauto. 
+  Unshelve. auto.  
+Qed.
+
+Lemma subtree_step_decompose (y : V) (Hvy: vvalid dfstree y): 
+  subtree_step y  == 
+  step_without_tree y ∪
+  (fun w => exists z, son y z /\ subtree_step z w).
+Proof.
+  split; intros.
+  - destruct H as [z [? ?]].
+    destruct (classic (y = z)); [subst; left; auto|right]. 
+    eapply real_offspring in H1 as [w [? ?]]; eauto. 
+    exists w; split; auto. 
+    exists z; split; auto. 
+  - destruct H as [|[w [? [z []]]]]. 
+    + exists y; split; auto. 
+      reflexivity. 
+    + exists z; split; auto. 
+      eapply step_reachable_reachable; eauto. 
+  Unshelve. auto.
+Qed. 
+
+Theorem low_tree_decompose (y: V) (Hvy: vvalid dfstree y):
+  low_tree y == (fun w => exists z, son y z /\ low_tree z w) ∪ step_without_tree y ∪ [y].
+Proof.
+  unfold low_tree. 
+  rewrite subtree_decompose. 
+  rewrite Sets_union_assoc.
+  
+  rewrite Sets_union_comm. 
+  apply Sets_union_congr; [|reflexivity]. 
+  split; intros.
+  - destruct H as [[z []]|[z []]]. 
+    + left; exists z; split; auto. 
+      left; auto. 
+    + destruct (classic (y = z)); [subst|].
+      * right; auto. 
+      * eapply real_offspring in H as [w []]; eauto. 
+        left; exists w; split; auto.
+        right; exists z; split; auto.
+  - destruct H as [[z [? [|[w []]]]]|]. 
+    + left; exists z; split; auto. 
+    + right; exists w; split; auto. 
+      eapply step_reachable_reachable; eauto.
+    + right; exists y; split; auto. 
+      reflexivity. 
+  Unshelve. auto. 
+Qed.
+
+Lemma low_valid_induction (v: V) (fun_low: V -> nat)
+  (IHv: forall w, son v w -> is_low_v w (fun_low w)): 
+  min_value_of_subset Nat.le (son v) fun_low == 
+  min_value_of_subset Nat.le ((fun w => exists z, son v z /\ low_tree z w)) dfn.
+Proof. 
+  intros; split; intros.
+  * destruct H as [z [[] ?]].
+    pose proof IHv z H as [? [[] ?]].
+    exists x; split.
+    ** split. 
+       { exists z; split; auto. } 
+       { intros. 
+         destruct H5 as [z0 []].
+         pose proof IHv z0 H5 as [? [[] ?]]. 
+         pose proof H0 z0 H5.  
+         pose proof H8 b H6.
+         lia. } 
+    ** lia. 
+  * destruct H as [? [[] ?]].
+    destruct H as [? []]. 
+    exists x0; split.
+    ** split; auto. 
+       intros. 
+       destruct (IHv x0 H) as [? [[] ?]]. 
+       pose proof H5 x H2. 
+       pose proof IHv b H3 as [? [[] ?]]. 
+       rewrite <- H6, <- H10. 
+       pose proof H5 x0 (ltac:(left; reflexivity)). 
+       pose proof H9 b (ltac:(left; reflexivity)). 
+       pose proof H0 x2 (ltac:(exists b; split; auto)). 
+       lia.
+    ** subst. 
+       unfold ge in *. 
+       pose proof IHv x0 H as [? [[] ?]].
+       pose proof H3 x H2. 
+       pose proof H0 x1 (ltac:(exists x0; split; auto)). 
+       lia.
+Qed. 
+
+Lemma low_valid_induction_is_low 
+  (v: V) 
+  (fun_low: V -> nat) 
+  (Hv: vvalid dfstree v)
+  (IHv: forall w, son v w -> is_low_v w (fun_low w)):
+  low_valid_v v fun_low ->
+  is_low_v v (fun_low v).
+Proof.
+  intros.
+  unfold low_valid_v in H. 
+  rewrite low_valid_induction in H; auto.
+  apply min_union_iff in H.
+  unfold is_low_v.
+  rewrite low_tree_decompose; auto. 
+  rewrite Sets_union_assoc.
+  auto.
+Qed.
+
+Lemma low_valid_implies_is_low 
+  (fun_low: V -> nat): 
+  low_valid fun_low ->
+  is_low fun_low.
+Proof.
+  intros low_valid.
+  unfold is_low.
+  pose proof @rooted_tree_induction_bottom_up 
+  (RootedTreeType V E) V E _ _ _ _ _ dfstree tree_valid _
+  (fun v => vvalid dfstree v -> is_low_v v (fun_low v)).
+  apply H.
+  intros.
+  apply low_valid_induction_is_low; auto.
+  intros; apply H0; auto. 
+  destruct H2; eapply step_vvalid2; eauto.
+Qed. *)
 
 (* low_valid: satisfied after program execution *)
 (* is_low: definition of low based on dfn value *)
@@ -604,192 +794,6 @@ Proof.
   intros; apply H0; auto. 
   destruct H2; eapply step_vvalid2; eauto.
 Qed.
-
-(* 下面是一个重新定义的尝试。 low_tree等的定义多传一个参数，因为儿子的lowtree不能走的边应该和父亲相同。 
-但是边界情况的讨论还是不可避免。 *)
-(* 
-Definition subtree_step (y: V) (e: option E): (V -> Prop) :=
-  match e with
-  | Some e =>
-    fun w => exists z, subtree y z /\ step_without g e z w
-  | None =>
-    fun w => exists z, subtree y z /\ step g z w
-  end.
-
-Definition step_without_parent_edge (x: V) : (V -> Prop) :=
-  fun y : V => 
-    match dfstree.(edge) x with
-    | Some e =>
-      step_without g e x y
-    | None =>
-      step g x y
-    end.
-
-Definition low_tree (y: V) (e: option E) : V -> Prop := subtree y ∪ subtree_step y e.
-
-(* v的low值满足定义 *)
-Definition is_low_v (v: V): nat -> Prop :=
-  fun lowv => 
-    min_value_of_subset Nat.le (low_tree v (dfstree.(edge) v)) dfn lowv.
-
-Definition is_low (fun_low: V -> nat): Prop :=
-  forall v, vvalid dfstree v -> is_low_v v (fun_low v). 
-
-(* 函数fun_low在v上满足local性质 *)
-Definition low_valid_v (v: V) (fun_low: V -> nat): Prop :=
-  min_value_of_subset Nat.le
-  (min_value_of_subset Nat.le ([v] ∪ step_without_parent_edge v) dfn ∪
-  min_value_of_subset Nat.le (son v) fun_low )
-  id (fun_low v).
-
-
-Definition low_valid (fun_low: V -> nat): Prop := 
-  forall v, vvalid dfstree v -> low_valid_v v fun_low.
-
-Lemma step_tree_edge: forall y z e, 
-  step_aux dfstree e y z -> 
-  dfstree.(edge) z = Some e. 
-Proof.  
-  intros. 
-  destruct H. 
-  auto. 
-Qed.
-
-Lemma subtree_decompose (u: V): 
-  subtree u ==  
-  [u] ∪ 
-  (fun w => exists z, son u z /\ subtree z w).
-Proof. 
-  split; intros. 
-  - destruct (classic (u = a)). 
-    * subst; left; reflexivity. 
-    * eapply real_offspring in H0 as [? []]; eauto . 
-      right; exists x; auto. 
-  - destruct H as [|[? []]].
-    * sets_unfold in H; subst; reflexivity. 
-    * eapply step_reachable_reachable; eauto. 
-  Unshelve. auto.  
-Qed.
-
-Lemma subtree_step_decompose_root: 
-  subtree_step theroot None == 
-  step_without_parent_edge theroot ∪ 
-  (fun w => exists z, son theroot z /\ subtree_step z None w).
-Proof.
-  unfold subtree_step, step_without_parent_edge. 
-  rewrite root_no_edge; auto. 
-  split; intros. 
-  - destruct H as [z []]. 
-    destruct (classic (theroot = z)) as [|neq_theroot_z].
-    * subst; left; auto.
-    * eapply real_offspring in neq_theroot_z as [w []]; eauto.
-      right; exists w; split; auto. 
-      exists z; split; auto.
-  - destruct H as [|[? []]].
-    * exists theroot; split; [reflexivity|auto]. 
-    * destruct H0 as [z []]. 
-      exists z; split; auto.
-      eapply step_reachable_reachable; eauto.  
-  Unshelve. auto. 
-Qed.
-
-Lemma subtree_step_decompose (y : V) (Hvy: vvalid dfstree y): 
-  subtree_step y (dfstree.(edge) y) == 
-  step_without_parent_edge y ∪
-  (fun w => exists z, son y z /\ subtree_step z (dfstree.(edge) y) w).
-Proof. 
-  destruct (classic (y = theroot)) as [|neq_y_theroot]. 
-  { subst. rewrite root_no_edge; auto. 
-    apply subtree_step_decompose_root. }  
-  assert (exists e, dfstree.(edge) y = Some e) as [e Heq] by (apply edge_some; auto). 
-  split; intros.
-  - unfold subtree_step in H. 
-    rewrite Heq in H.
-    destruct H as [z [? [e']]].
-    destruct (classic (y = z)) as [|neq_y_z].
-    * subst; left; unfold step_without_parent_edge. 
-      rewrite Heq. exists e'; auto.
-    * eapply real_offspring in neq_y_z as [w []]; eauto. 
-      destruct H0 as [? Hneq]. 
-      right; exists w; split; auto. 
-      unfold subtree_step. 
-      rewrite Heq. 
-      pose proof H1 as [ew]. 
-      exists z; split; [auto|eexists; eauto].
-  - destruct H. 
-    + unfold step_without_parent_edge in H. 
-      unfold subtree_step. 
-      rewrite Heq in *. 
-      exists y; split; [reflexivity|auto]. 
-    + destruct H as [z []]. 
-      unfold subtree_step in *. 
-      rewrite Heq. 
-      rewrite Heq in H0. 
-      destruct H0 as [w []]. 
-      exists w; split; auto. 
-      eapply step_reachable_reachable; eauto. 
-  Unshelve. auto.
-Qed.
-
-Lemma low_tree_decompose (y : V) (Hvy: vvalid dfstree y) :
-  low_tree y (dfstree.(edge) y) == 
-  [y] ∪ 
-  (fun w => exists z, son y z /\ low_tree z (dfstree.(edge) y) w) ∪ 
-  step_without_parent_edge y.                
-Proof.
-  unfold low_tree.
-  rewrite subtree_decompose. 
-  rewrite !Sets_union_assoc.
-  apply Sets_union_congr; [reflexivity|]. 
-  rewrite subtree_step_decompose; auto. 
-  rewrite <- !Sets_union_assoc. 
-  rewrite Sets_union_comm. 
-  rewrite <- Sets_union_assoc.
-  apply Sets_union_congr; [|reflexivity]. 
-  split; intros. 
-  - destruct H as [[x []]|[x []]]; exists x; split; auto. 
-    right; auto. left; auto. 
-  - destruct H as [z [? [|]]]; [right|left]; exists z; split; auto. 
-Qed.
-
-Lemma low_valid_induction (v: V) (fun_low: V -> nat)
-  (IHv: forall w, son v w -> is_low_v w (fun_low w)): 
-  min_value_of_subset Nat.le (son v) fun_low == 
-  min_value_of_subset Nat.le ((fun w => exists z, son v z /\ low_tree z (dfstree.(edge) z) w)) dfn.
-Proof. 
-  intros; split; intros.
-  * destruct H as [z [[] ?]].
-    pose proof IHv z H as [? [[] ?]].
-    exists x; split.
-    ** split. 
-       { exists z; split; auto.  } 
-       { intros. 
-         destruct H5 as [z0 []].
-         pose proof IHv z0 H5 as [? [[] ?]]. 
-         pose proof H0 z0 H5.  
-         pose proof H8 b H6.
-         lia. } 
-    ** lia. 
-  * destruct H as [? [[] ?]].
-    destruct H as [? []]. 
-    exists x0; split.
-    ** split; auto. 
-       intros. 
-       destruct (IHv x0 H) as [? [[] ?]]. 
-       pose proof H5 x H2. 
-       pose proof IHv b H3 as [? [[] ?]]. 
-       rewrite <- H6, <- H10. 
-       pose proof H5 x0 (ltac:(left; reflexivity)). 
-       pose proof H9 b (ltac:(left; reflexivity)). 
-       pose proof H0 x2 (ltac:(exists b; split; auto)). 
-       lia.
-    ** subst. 
-       unfold ge in *. 
-       pose proof IHv x0 H as [? [[] ?]].
-       pose proof H3 x H2. 
-       pose proof H0 x1 (ltac:(exists x0; split; auto)). 
-       lia.
-Qed.  *)
 
 
 Lemma root_dfn_minimum: 
