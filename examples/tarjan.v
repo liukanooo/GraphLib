@@ -299,184 +299,6 @@ Definition low_valid_v (v: V) (fun_low: V -> nat): Prop :=
 Definition low_valid (fun_low: V -> nat): Prop := 
   forall v, vvalid dfstree v -> low_valid_v v fun_low.
 
-
-Lemma reachable_subtree:
-  forall u, reachable g theroot u -> subtree theroot u.
-Proof.
-  intros.
-  apply reacheable_is_visited in H.
-  destruct (classic (theroot = u)) as [|neq_root].
-  - subst; reflexivity.
-  - eapply root_is_root in H; eauto.
-Qed.
-
-Lemma leaf_subree (u: V):
-  isleaf dfstree u ->
-  subtree u == [u].
-Proof.
-  intros.
-  split; intros.
-  - destruct (classic (u = a)); auto.
-  eapply real_offspring in H0; eauto.
-  destruct H0 as [z []].
-  exfalso; eapply H; eauto.
-  - sets_unfold in H0; subst.
-  reflexivity.
-  Unshelve. auto.
-Qed.
-
-Lemma subtree_decompose (u: V): 
-  subtree u ==  
-  [u] ∪ 
-  (fun w => exists z, son u z /\ subtree z w).
-Proof. 
-  split; intros. 
-  - destruct (classic (u = a)). 
-    * subst; left; reflexivity. 
-    * eapply real_offspring in H0 as [? []]; eauto . 
-      right; exists x; auto. 
-  - destruct H as [|[? []]].
-    * sets_unfold in H; subst; reflexivity. 
-    * eapply step_reachable_reachable; eauto. 
-  Unshelve. auto.  
-Qed.
-
-Lemma subtree_step_decompose (y : V) (Hvy: vvalid dfstree y): 
-  subtree_step y  == 
-  step_without_tree y ∪
-  (fun w => exists z, son y z /\ subtree_step z w).
-Proof.
-  split; intros.
-  - destruct H as [z [? ?]].
-    destruct (classic (y = z)); [subst; left; auto|right]. 
-    eapply real_offspring in H1 as [w [? ?]]; eauto. 
-    exists w; split; auto. 
-    exists z; split; auto. 
-  - destruct H as [|[w [? [z []]]]]. 
-    + exists y; split; auto. 
-      reflexivity. 
-    + exists z; split; auto. 
-      eapply step_reachable_reachable; eauto. 
-  Unshelve. auto.
-Qed. 
-
-Theorem low_tree_decompose (y: V) (Hvy: vvalid dfstree y):
-  low_tree y == (fun w => exists z, son y z /\ low_tree z w) ∪ step_without_tree y ∪ [y].
-Proof.
-  unfold low_tree. 
-  rewrite subtree_decompose. 
-  rewrite Sets_union_assoc.
-  
-  rewrite Sets_union_comm. 
-  apply Sets_union_congr; [|reflexivity]. 
-  split; intros.
-  - destruct H as [[z []]|[z []]]. 
-    + left; exists z; split; auto. 
-      left; auto. 
-    + destruct (classic (y = z)); [subst|].
-      * right; auto. 
-      * eapply real_offspring in H as [w []]; eauto. 
-        left; exists w; split; auto.
-        right; exists z; split; auto.
-  - destruct H as [[z [? [|[w []]]]]|]. 
-    + left; exists z; split; auto. 
-    + right; exists w; split; auto. 
-      eapply step_reachable_reachable; eauto.
-    + right; exists y; split; auto. 
-      reflexivity. 
-  Unshelve. auto. 
-Qed.
-
-Lemma low_valid_induction (v: V) (fun_low: V -> nat)
-  (IHv: forall w, son v w -> is_low_v w (fun_low w)): 
-  min_value_of_subset Nat.le (son v) fun_low == 
-  min_value_of_subset Nat.le ((fun w => exists z, son v z /\ low_tree z w)) dfn.
-Proof. 
-  intros; split; intros.
-  * destruct H as [z [[] ?]].
-    pose proof IHv z H as [? [[] ?]].
-    exists x; split.
-    ** split. 
-       { exists z; split; auto. } 
-       { intros. 
-         destruct H5 as [z0 []].
-         pose proof IHv z0 H5 as [? [[] ?]]. 
-         pose proof H0 z0 H5.  
-         pose proof H8 b H6.
-         lia. } 
-    ** lia. 
-  * destruct H as [? [[] ?]].
-    destruct H as [? []]. 
-    exists x0; split.
-    ** split; auto. 
-       intros. 
-       destruct (IHv x0 H) as [? [[] ?]]. 
-       pose proof H5 x H2. 
-       pose proof IHv b H3 as [? [[] ?]]. 
-       rewrite <- H6, <- H10. 
-       pose proof H5 x0 (ltac:(left; reflexivity)). 
-       pose proof H9 b (ltac:(left; reflexivity)). 
-       pose proof H0 x2 (ltac:(exists b; split; auto)). 
-       lia.
-    ** subst. 
-       unfold ge in *. 
-       pose proof IHv x0 H as [? [[] ?]].
-       pose proof H3 x H2. 
-       pose proof H0 x1 (ltac:(exists x0; split; auto)). 
-       lia.
-Qed. 
-
-Lemma low_valid_induction_is_low 
-  (v: V) 
-  (fun_low: V -> nat) 
-  (Hv: vvalid dfstree v)
-  (IHv: forall w, son v w -> is_low_v w (fun_low w)):
-  low_valid_v v fun_low ->
-  is_low_v v (fun_low v).
-Proof.
-  intros.
-  unfold low_valid_v in H. 
-  rewrite low_valid_induction in H; auto.
-  apply min_union_iff in H.
-  unfold is_low_v.
-  rewrite low_tree_decompose; auto. 
-  rewrite Sets_union_assoc.
-  auto.
-Qed.
-
-Lemma low_valid_implies_is_low 
-  (fun_low: V -> nat): 
-  low_valid fun_low ->
-  is_low fun_low.
-Proof.
-  intros low_valid.
-  unfold is_low.
-  pose proof @rooted_tree_induction_bottom_up 
-  (RootedTreeType V E) V E _ _ _ _ _ dfstree tree_valid _
-  (fun v => vvalid dfstree v -> is_low_v v (fun_low v)).
-  apply H.
-  intros.
-  apply low_valid_induction_is_low; auto.
-  intros; apply H0; auto. 
-  destruct H2; eapply step_vvalid2; eauto.
-Qed.
-
-Lemma root_dfn_minimum: 
-  forall x, min_value_of_subset Nat.le (subtree x) dfn (dfn x).
-Proof.
-  intros x.
-  unfold min_value_of_subset; exists x; split; [split|].
-  - unfold subtree.  
-    sets_unfold. 
-    reflexivity. 
-  - intros; subst. 
-    unfold subtree in H. 
-    eapply dfn_valid_offspring; eauto; apply H.
-    Unshelve. auto. 
-  - reflexivity.
-Qed.
-
-
 Lemma low_valid1: is_low low -> 
   forall y z, vvalid dfstree y -> 
   subtree y z -> 
@@ -516,11 +338,159 @@ Proof.
   - right; exists z, a; auto. 
 Qed. 
 
+
+Lemma low_witness (w: V) (n: nat):
+  is_low_v w n -> 
+  exists x, low_tree w x /\ dfn x = n.
+Proof.
+  unfold is_low_v.
+  intros [x [[Hx _] Heq]].
+  exists x; auto.
+Qed.
+
+Lemma low_bound (w: V) (n: nat) (x: V):
+  is_low_v w n -> 
+  low_tree w x -> 
+  n <= dfn x.
+Proof.
+  unfold is_low_v.
+  intros [y [[_ Hmin] Heq]] Hx.
+  subst. apply Hmin. auto.
+Qed.
+
+Lemma subtree_decompose (u: V): 
+  subtree u ==  
+  [u] ∪ 
+  (fun w => exists z, son u z /\ subtree z w).
+Proof. 
+  split; intros. 
+  - destruct (classic (u = a)). 
+    * subst; left; reflexivity. 
+    * eapply real_offspring in H0 as [? []]; eauto . 
+      right; exists x; auto. 
+  - destruct H as [|[? []]].
+    * sets_unfold in H; subst; reflexivity. 
+    * eapply step_reachable_reachable; eauto. 
+  Unshelve. auto.  
+Qed.
+
+Lemma subtree_step_decompose (y : V) (Hvy: vvalid dfstree y): 
+  subtree_step y  == 
+  step_without_tree y ∪
+  (fun w => exists z, son y z /\ subtree_step z w).
+Proof.
+  split; intros.
+  - destruct H as [z [? ?]].
+    destruct (classic (y = z)); [subst; left; auto|right]. 
+    eapply real_offspring in H1 as [w [? ?]]; eauto. 
+    exists w; split; auto. 
+    exists z; split; auto. 
+  - destruct H as [|[w [? [z []]]]]. 
+    + exists y; split; auto. 
+      reflexivity. 
+    + exists z; split; auto. 
+      eapply step_reachable_reachable; eauto. 
+  Unshelve. auto.
+Qed. 
+
+Theorem low_tree_decompose (y: V) (Hvy: vvalid dfstree y):
+  low_tree y == 
+  [y] ∪ step_without_tree y ∪ 
+  (fun w => exists z, son y z /\ low_tree z w).
+Proof.
+  unfold low_tree. 
+  rewrite subtree_decompose. 
+  rewrite !Sets_union_assoc. 
+  apply Sets_union_congr; [reflexivity|].
+  rewrite subtree_step_decompose; auto.
+  rewrite <- Sets_union_assoc.
+  rewrite Sets_union_comm.
+  rewrite <- Sets_union_assoc. 
+  rewrite Sets_union_comm. 
+  apply Sets_union_congr; [reflexivity|]. 
+  split; [intros [[z []]|[z []]]|intros [z [? [|]]]]. 
+  * exists z; split; [|right]; auto. 
+  * exists z; split; [|left]; auto. 
+  * right; exists z; split; auto. 
+  * left; exists z; split; auto. 
+Qed.
+
+
+Lemma low_valid_induction (v: V) (fun_low: V -> nat)
+  (IHv: forall w, son v w -> is_low_v w (fun_low w)): 
+  min_value_of_subset Nat.le (son v) fun_low == 
+  min_value_of_subset Nat.le ((fun w => exists z, son v z /\ low_tree z w)) dfn.
+Proof. 
+  split; intros.
+  - apply min_eq_forward with (f1 := fun_low) (P1 := son v); auto.
+    + apply NatLe_TotalOrder.
+    + intros z Hson.
+      pose proof IHv z Hson as Hlow.
+      apply low_witness in Hlow as [w [Hw Heq]].
+      exists w. split.
+      * exists z; split; auto.
+      * rewrite Heq. apply Nat.le_refl.
+    + intros w [z [Hson Hlow]].
+      exists z. split; auto.
+      pose proof IHv z Hson as Hlowz.
+      apply low_bound with (x := w) in Hlowz; auto.
+  - apply min_eq_forward with 
+      (f1 := dfn) 
+      (P1 := (fun w => exists z, son v z /\ low_tree z w)); auto.
+    + apply NatLe_TotalOrder.
+    + intros w [z [Hson Hlow]].
+      exists z. split; auto.
+      pose proof IHv z Hson as Hlowz.
+      apply low_bound with (x := w) in Hlowz; auto.
+    + intros z Hson.
+      pose proof IHv z Hson as Hlow.
+      apply low_witness in Hlow as [w [Hw Heq]].
+      exists w. split.
+      * exists z; split; auto.
+      * rewrite Heq. apply Nat.le_refl.
+Qed. 
+
+Lemma low_valid_induction_is_low 
+  (v: V) 
+  (fun_low: V -> nat) 
+  (Hv: vvalid dfstree v)
+  (IHv: forall w, son v w -> is_low_v w (fun_low w)):
+  low_valid_v v fun_low ->
+  is_low_v v (fun_low v).
+Proof.
+  intros.
+  unfold low_valid_v in H. 
+  rewrite low_valid_induction in H; auto.
+  apply min_union_iff in H.
+  unfold is_low_v.
+  rewrite low_tree_decompose; auto. 
+  rewrite (Sets_union_comm [v] (step_without_tree v)).
+  rewrite Sets_union_comm. 
+  auto.
+Qed.
+
+Lemma low_valid_implies_is_low 
+  (fun_low: V -> nat): 
+  low_valid fun_low ->
+  is_low fun_low.
+Proof.
+  intros low_valid.
+  unfold is_low.
+  pose proof @rooted_tree_induction_bottom_up 
+  (RootedTreeType V E) V E _ _ _ _ _ dfstree tree_valid _
+  (fun v => vvalid dfstree v -> is_low_v v (fun_low v)).
+  apply H.
+  intros.
+  apply low_valid_induction_is_low; auto.
+  intros; apply H0; auto. 
+  destruct H2; eapply step_vvalid2; eauto.
+Qed.
+
 End LOW.
 
 Context {low_valid: is_low low}.
 
-(* 这个证明需要处理 *)
+
 Lemma closed_offspring: forall x y z e,
   dfn x < low y ->
   step_aux dfstree e x y ->
@@ -529,53 +499,98 @@ Lemma closed_offspring: forall x y z e,
 Proof.
   intros.
   unfold reachable_without in H1.
-  induction_n1 H1.
-  - reflexivity.
-  - rename z into w; rename y0 into z. 
-    assert (Hyz: subtree y z) by (apply IHrt; auto); clear IHrt. 
-    assert (Hcases: subtree z w \/ subtree w z). {
-        assert (reachable g theroot z). { 
-          apply step_vvalid2 in H0 as Hvy.
-          eapply root_is_root in Hvy; eauto. 
-          simpl in Hvy. 
-          eapply sub_reachable; eauto.
-          transitivity y; auto. }  
-        destruct H2 as [ezw []].  
-        assert (step g z w) by (exists ezw; auto).
-        apply nocross; auto. 
-        transitivity z; auto. 
-        apply step_rt; auto. } 
-    destruct Hcases as [Hzw|Hwz]. 
-    * transitivity z; auto.
-    * eapply offspring_one_reachable in Hwz; [|apply Hyz]; 
-      destruct Hwz as [?|Hwy]; auto.
-      destruct (classic (w = y)); [subst; reflexivity|]. 
-      assert (Hwx: subtree w x). {
-        eapply one_reachable_down_up; eauto. 
-        exists e; auto. } 
-      destruct H2 as [ezw [Hzw Hneq]].
-      destruct (classic (evalid dfstree ezw)). 
-      + apply no_empty_edge in H2 as [z' [w' ]]; auto.
-        apply sub in H2 as Hg. 
-        eapply step_aux_unique_undirected in Hg as [[]|[]]; 
-        [| | |apply Hzw]; eauto; subst z' w'. 
-        { transitivity z; auto. 
-          apply step_rt. 
-          exists ezw; auto. }
-        { exfalso. 
-          assert (Hsonxy: son x y) by (exists e; auto).
-          assert (Hsonwz: son w z) by (exists ezw; auto).
-          eapply step_subtree_pair in Hsonxy; eauto. 
-          destruct Hsonxy; subst.
-          eapply father_eunique in H2; eauto. }
-      + eapply step_vvalid2 in H0 as Hvy. 
-        assert (low y <= dfn w). {
-          eapply low_valid2; eauto. 
-          exists ezw; auto. } 
-        apply @dfn_valid_offspring with (dfn:=dfn) in Hwx; auto. 
-        lia. 
+  induction_n1 H1; [reflexivity|].
+  rename z into w; rename y0 into z. 
+  (* 
+     归纳假设 (IH): y 到 z 的路径已经在 y 的子树内。
+     目标: 证明下一步走到 w，w 依然在 y 的子树内。
+     
+          x
+          | e (blocked)
+          v
+          y
+         / \
+       ... z ... (已知 z 在 y 的子树内)
+            \?
+             w (下一步)
+  *)
+  assert (Hyz: subtree y z) by (apply IHrt; auto); clear IHrt. 
+  
+  (* 利用 DFS 性质：无横叉边 (No Cross Edge)。
+     所以 w 要么是 z 的后代，要么是 z 的祖先。*)
+  assert (Hcases: subtree z w \/ subtree w z). {
+      assert (reachable g theroot z). { 
+        apply step_vvalid2 in H0 as Hvy.
+        eapply root_is_root in Hvy; eauto. 
+        simpl in Hvy. 
+        eapply sub_reachable; eauto.
+        transitivity y; auto. }  
+      destruct H2 as [ezw []].  
+      assert (step g z w) by (exists ezw; auto).
+      apply nocross; auto. 
+      transitivity z; auto. 
+      apply step_rt; auto. } 
+  
+  destruct Hcases as [Hzw|Hwz]. 
+  
+  (* Case 1: w 是 z 的后代。
+     这种情况很简单，由传递性可知 w 也在 y 的子树内。
+     
+          y
+          :
+          z
+          : (subtree)
+          v
+          w
+  *)
+  1: { transitivity z; auto. }
+
+  (* Case 2: w 是 z 的祖先。
+     因为z同时为y和w的后代，所以y与w存在后代关系。
+     如果w是y的后代，那么已经得证。
+  *)
+    eapply offspring_one_reachable in Hwz; [|apply Hyz];
+    destruct Hwz as [?|Hwy]; auto.
+    destruct (classic (w = y)); [subst; reflexivity|]. 
+    (*  y是w的后代时：
+            w -------.               
+            ^        |                 
+            |        |                 
+            x        |                
+            | e      |(是否是树边？)         
+            v        |                 
+            y        |                 
+            :        |                 
+            v        |                 
+            z - - - -'             *)
+    assert (Hwx: subtree w x). {
+      eapply one_reachable_down_up; eauto. 
+      exists e; auto. } 
+    destruct H2 as [ezw [Hzw Hneq]].
+    destruct (classic (evalid dfstree ezw)). 
+    (* w -> z是树边时，与树的性质矛盾 *)
+    + apply no_empty_edge in H2 as [z' [w' ]]; auto.
+      apply sub in H2 as Hg. 
+      eapply step_aux_unique_undirected in Hg as [[]|[]]; 
+      [| | |apply Hzw]; eauto; subst z' w'. 
+      * transitivity z; auto. 
+        apply step_rt. 
+        exists ezw; auto. 
+      * exfalso. 
+        assert (Hsonxy: son x y) by (exists e; auto).
+        assert (Hsonwz: son w z) by (exists ezw; auto).
+        eapply step_subtree_pair in Hsonxy; eauto. 
+        destruct Hsonxy; subst.
+        eapply father_eunique in H2; eauto.
+    (* z -> w不是树边时，与low的取值矛盾 *)
+    + eapply step_vvalid2 in H0 as Hvy. 
+      assert (low y <= dfn w). {
+        eapply low_valid2; eauto. 
+        exists ezw; auto. } 
+      apply @dfn_valid_offspring with (dfn:=dfn) in Hwx; auto. 
+      lia. 
   Unshelve. auto. auto. auto.
-Qed.  
+Qed.
 
 
 Lemma father_unreachable: forall x y e,
@@ -593,7 +608,9 @@ Proof.
   Unshelve. auto. auto.
 Qed. 
 
-(* 这个证明最好补充上图来解释 *)
+(* ================================================================= *)
+(* 主定理：树边是否是桥等价于桥两端点的low值与dfn值关系                 *)
+(* ================================================================= *)
 Lemma tarjan: forall x y e, 
   step_aux dfstree e x y -> 
   (is_bridge g e <-> dfn x < low y).
@@ -606,14 +623,31 @@ Proof.
   - intros Hb; apply NNPP. 
     unfold not at 1; intros. 
     eapply Compare_dec.not_lt in H. 
+    (* 
+       分析 low y 的定义。low y 是 y 能通过其子树中的点 z 
+       以及一条非树边 (z, w) 所能到达的最小 dfn 值的点 w。
+    *)
     eapply low_intros with (y := y) in low_valid as 
     [[z [Hyz Hlowy]]|[z [w [Hyz [Hzw Hlowy]]]]]; eauto. 
-    (* 简单情况：y的low值来自其subtree *)
+    
+    (* Case 1: 简单情况：y的low值来自其subtree内部，没有跳出子树 *)
     1: { apply dfnv in H0. 
       eapply @dfn_valid_offspring in Hyz; eauto. lia. } 
-    (* 一般情况：y的low值来自其subtree_step的点w，即subtree y z /\ step_without_tree z w *)
+    
+    (* Case 2: 一般情况：存在回边/非树边。
+       y 的后代 z 有一条边指向 w (step_without_tree z w)。
+       图示如下：
+             x
+             | e (待测边)
+             v
+             y
+             : (subtree)
+             v
+             z - - -> w (非树边)
+    *)
     destruct Hzw as [ezw [Hzw Hout]]. 
-    (* 这个assert有点长，可能是nocrossedge的前提有点不自然，需要再检查一下。 *)
+    (* 利用 DFS 树性质：无横叉边 (No Cross Edge)，
+       所以 w 要么是 z 的祖先，要么是 z 的后代。 *)
       assert (Hcases: subtree z w \/ subtree w z). {
         assert (reachable g theroot z). {
           eapply root_is_root in Hvy; eauto. 
@@ -624,25 +658,43 @@ Proof.
         apply nocross; auto. 
         transitivity z; auto. 
         apply step_rt; auto. } 
-    (* z和w之间存在原图中的边，所以它们一定有子树关系 *)
+    
     destruct Hcases as [Himposible|Hwz]. 
 
-    (* 不可能情况：w是z的后代 *)
+    (* 不可能情况：w是z的后代。这与 w 的 dfn 更小矛盾 *)
     + eapply @dfn_valid_offspring in Himposible; eauto. 
       eapply @dfn_valid_offspring in Hyz; eauto. 
       apply dfnv in H0. lia. 
-    (* 可能情况：z是w的后代 *)
+    
+    (* 可能情况：z 是 w 的后代 (即 w 是 z 的祖先)。
+       此时我们需要判断 w 相对于 x 的位置。
+    *)
     + assert (Hxw: subtree x z) by (eapply step_reachable_reachable; eauto). 
       eapply offspring_one_reachable in Hxw; [|apply Hwz]; destruct Hxw as [Hxw|Hwx]; auto.
       (* w和x的子树都包含z，所以它们也有子树关系 *)
 
-      (* 当w为x的后代时，只可能w=x *)
+      (* 情况 2.1: w = x
+         即回边直接指回了 x。
+         
+         图示：
+             x <----------. (w=x)
+             | e          |
+             v            |
+             y            | (ezw)
+             :            |
+             v            |
+             z - - - - - -'
+         
+         存在环 x->y->...->z->x，去掉 e (x->y) 后，y 仍可通过 z 回到 x。
+         所以 e 不是桥。
+      *)
       * destruct (classic (x = w)); [subst w|].
-        (* w <> x时，low的取值存在矛盾 *)
+        (* w <> x时，逻辑上的矛盾排除 *)
         2: { eapply real_offspring in H1 as [t [Hxt Htw]]; eauto. 
           eapply @dfn_valid_offspring in Htw; eauto. 
           apply dfnv in Hxt. lia. } 
-        (* w = x时，可以构造不经过“桥”的路径 *)
+        
+        (* w = x时，构造旁路证明非桥 *)
         eapply Hb; [apply sub; eauto|]. 
         apply reachable_without_sym. 
         eapply reachable_without_step_offspring1 in Hyz; eauto. 
@@ -652,7 +704,24 @@ Proof.
         unfold not; intros; subst. 
         eapply step_evalid in He; eauto.
 
-      (* 当x为w的后代时，可以构造不经过“桥”的路径 *)
+      (* 情况 2.2: x 是 w 的后代 (w 是 x 的真祖先)
+         回边指到了 x 的上方。
+         
+         图示：
+             w < - - - -.
+             :          |
+             v          |
+             x          |
+             | e        | (ezw)
+             v          |
+             y          |
+             :          |
+             v          |
+             z - - - - -'
+         
+         存在路径 y->...->z->w->...->x，不经过 e。
+         所以 e 不是桥。
+      *)
       * eapply Hb; [apply sub; eauto|]. 
         apply reachable_without_sym. 
         
@@ -664,98 +733,80 @@ Proof.
         exists ezw; split; auto. 
         unfold not; intros; subst. 
         eapply step_evalid in He; eauto.
-  - intros. 
-    pose proof H0 as Hxy.
-    destruct H0 as [exy ?].
-    pose proof H0 as Hexy.
-    apply sub in H0.
-    eapply step_sym in H0 as Heyx.
-    unfold is_bridge; intros.
-    unfold not; intros.
-    eapply step_sym in Heyx.
-    eapply no_multiple_edge in He; eauto.
-    subst exy.
-    eapply step_aux_unique_undirected in Heyx; eauto.
-    destruct Heyx; destruct H3; subst x0 y0;
-    eapply father_unreachable; eauto. 
-    eapply reachable_without_sym; eauto.
-    Unshelve. auto. auto. auto. auto. auto. auto.
+  
+  - intros lowy. 
+    unfold is_bridge; intros x' y' He'. 
+    pose proof H0 as [exy Hxy]. 
+    eapply no_multiple_edge in He; eauto; subst. 
+    apply sub in Hxy as Hg. 
+    eapply step_aux_unique_undirected in He' as [[]|[]]; eauto; subst x' y'. 
+    * apply father_unreachable in Hxy; auto. 
+      unfold not; intros; apply Hxy. 
+      eapply reachable_without_sym; auto. 
+    * apply father_unreachable; auto. 
+  Unshelve. auto. auto. auto. auto. auto. auto.
+Qed.
+
+
+Lemma tree_path_safe: forall u v e,
+  reachable dfstree u v ->  
+  ~ evalid dfstree e ->      
+  reachable_without g e u v. 
+Proof.
+  intros u v e H_tree H_not_tree. 
+  unfold reachable in H_tree.
+  induction_n1 H_tree; [reflexivity|].
+  transitivity u0; auto.
+  apply step_without_rt.
+  destruct H as [e0 H_step_tree].
+  exists e0; split; auto.
+  unfold not; intros H_eq; subst e0.
+  apply H_not_tree.
+  eapply step_evalid; eauto.
 Qed.
 
 Definition reachable_edge (u: V) (e: E): Prop :=
   exists x y, step_aux g e x y /\ reachable g u x.
-(* 这个证明需要处理 *)
+
+
+(* ================================================================= *)
+(* 副定理：非树边一定不是桥 *)
+(* ================================================================= *)
 Lemma tarjan_trivial: forall e, 
   reachable_edge theroot e -> 
   reachable_visited ->
-  ~ evalid dfstree e ->
+  ~ evalid dfstree e -> 
   ~ is_bridge g e.
 Proof.
-  intros e He Hv H0.
-  assert (evalid g e) as H.
-  { destruct He as [x [y [He _]]]; 
-  eapply step_evalid; eauto. }
-  apply no_empty_edge in H as H1.
-  destruct H1 as [x [y H1]].
-  unfold not in *; intros.
-  unfold is_bridge in H2.
-  eapply H2; eauto.
-  unfold reachable_without.
+  intros e H_reach H_visited H_not_tree.
+  (* 
+            root
+           /    \
+          :      : (tree paths)
+          v      v
+          x ---- y
+             e (non-tree edge)
+  *)
+  destruct H_reach as [x [y [H_step_e H_root_x]]].
+  
+  assert (H_valid_x: vvalid dfstree x).
+  { apply H_visited; auto. }
+  assert (H_valid_y: vvalid dfstree y). { 
+    apply H_visited.
+    eapply reachable_step_reachable; eauto.
+    exists e; apply H_step_e. }
+
+  unfold is_bridge; unfold not; intros H_bridge.
+  eapply H_bridge; eauto; clear H_bridge.
+
+  apply step_sym in H_step_e. 
   transitivity (root dfstree).
-  * eapply reachable_without_sym.
-  destruct He as [x0 [y0 [He Hr]]].
-  assert (vvalid dfstree x). {
-  eapply step_aux_unique_undirected in He; eauto.
-  destruct He as [He | He]; destruct He; subst x0 y0.
-  apply Hv; auto.
-  apply Hv; auto.
-  unfold reachable in *.
-  transitivity_n1 y; auto.
-  eapply step_sym'.
-  exists e; auto. 
-  }
-  eapply root_is_root in H3 as H4; eauto.
-  unfold reachable in H4.
-  clear H1 H2 H3.
-  remember (root dfstree) as rt.
-  induction_n1 H4.
-  ** reflexivity.
-  ** transitivity rt0.
-  eapply IHrt; eauto.
-  unfold reachable_without. 
-  transitivity_1n x; try reflexivity.
-  destruct H1 as [e0 ?].
-  exists e0; split; auto.
-  unfold not; intros; subst e0.
-  eapply H0; eauto.
-  eapply step_evalid; eauto.
-  *
-  destruct He as [x0 [y0 [He Hr]]].
-  assert (vvalid dfstree y). {
-  eapply step_aux_unique_undirected in He; eauto.
-  destruct He as [He | He]; destruct He; subst x0 y0.
-  apply Hv; auto.
-  unfold reachable in *.
-  transitivity_n1 x; auto.
-  exists e; auto.
-  apply Hv; auto. 
-  }
-  eapply root_is_root in H3 as H4.
-  unfold reachable in H4.
-  clear H1 H2 H3.
-  remember (root dfstree) as rt.
-  induction_n1 H4.
-  ** reflexivity.
-  ** transitivity rt0.
-  eapply IHrt; eauto.
-  transitivity_1n y; try reflexivity.
-  destruct H1 as [e0 ?].
-  exists e0; split; auto.
-  unfold not; intros; subst e0.
-  eapply H0; eauto.
-  eapply step_evalid; eauto.
-  ** auto.
-  * simpl; auto.
+  * apply reachable_without_sym.
+    eapply tree_path_safe; eauto.
+    apply root_is_root; auto.
+  * apply tree_path_safe; auto.
+    apply root_is_root; auto.
 Qed.
+
 
 End TARJAN.
