@@ -47,6 +47,7 @@ Proof.
   intros. split; intros.
   - unfold min_value_weight_epath_in_vset in *.
     destruct H as [[[p [[Hpvalid Hpmin]]]]|[]].
+    (* 一般情况：最短路径存在 *)
     * left; split; auto.
       exists p; split; auto; split.
       eapply (is_epath_through_vset_subset) with (S1:=S); [eauto|left; auto].
@@ -54,7 +55,7 @@ Proof.
       pose proof Hq as Hq'.
       eapply is_epath_through_vset_split in Hq as [Hq|[p_pre [p_mid [p_suf [H_pre [H_suf [H_mid Heq]]]]]]]; auto.
       (* 路径 q 分解: k --p_pre--> k --p_mid--> k --p_suf--> v
-                        \_≥0环_/   \_≥0环_/    \__通过S__/
+                      \___≥0环____/\____≥0环___/\___通过S___/
          消除两个非负环后: k ----------------------p_suf--> v 更优 *)
       destruct H_mid as [H_mid _]; apply non_neg_loop in H_mid.
       destruct H_pre as [H_pre _]; apply non_neg_loop in H_pre. 
@@ -67,7 +68,7 @@ Proof.
       rewrite <- Z_op_plus_O_l at 1.
       apply Z_op_plus_mono; [auto|apply Z_op_le_refl].
 
-
+    (* 特殊情况：路径不存在 *)
     * right; split; auto.
       intros q Hq.
       rewrite Z_op_none_le_iff.
@@ -82,6 +83,7 @@ Proof.
 
   - unfold min_value_weight_epath_in_vset in *.
     destruct H as [[[p [[Hpvalid Hpmin]]]]|[]].
+    (* 一般情况：最短路径存在 *)
     * pose proof Hpvalid as Hp'. 
       eapply is_epath_through_vset_split in Hpvalid as [|[p_pre [p_mid [p_suf [H_pre [H_suf [H_mid Heq]]]]]]]; auto. 
       + left; split; auto. 
@@ -90,9 +92,12 @@ Proof.
         eapply is_epath_through_vset_subset with (S2:=S ∪ [k]) in Hq; [|left; auto].
         apply Hpmin; auto.
       + (* 最优路径 p 分解: k --p_pre--> k --p_mid--> k --p_suf--> v
-                           \_≥0环_/   \_≥0环_/    \__通过S__/
-           若环非零则矛盾；若是零环则取 p_suf 作为 S 中最优路径 *)
+                           \___≥0环____/\____≥0环____/\___通过S___/
+           若环非零则与 p 最短矛盾；若都是零环则取 p_suf 作为 S 中最优路径 *)
+
+
         destruct (classic (Z_op_le (epath_weight g (p_pre ++ p_mid)) (Some 0))).
+        (* 当 p_pre ++ p_mid 是正环时 *)
         2: { 
           destruct d_kv. 2: { 
             right; split; auto.
@@ -116,6 +121,8 @@ Proof.
           rewrite epath_weight_app_assoc in H;
           rewrite Heq1, Heq2 in H;
           inversion H). } 
+
+        (* 当 p_pre ++ p_mid 是零环时 *)
         assert (epath_weight g (p_pre ++ p_mid) = Some 0). {
           destruct H_pre as [H_pre _].
           destruct H_mid as [H_mid _]. 
@@ -140,6 +147,7 @@ Proof.
         apply Hpmin in Hq. 
         rewrite H_suf_weight, <- H; auto.
 
+    (* 特殊情况：路径不存在 *)
     * right; split; auto.
       intros q Hq.
       rewrite Z_op_none_le_iff.
@@ -156,7 +164,8 @@ Theorem floyd_warshall_update_end:
 Proof. 
   intros. split; intros. 
   - unfold min_value_weight_epath_in_vset in *. 
-    destruct H as [[[p [[Hpvalid Hpmin]]]]|[]].  
+    destruct H as [[[p [[Hpvalid Hpmin]]]]|[]].
+    (* 一般情况：最短路径存在 *)
     * left; split; auto. 
       exists p; split; auto; split. 
       eapply (is_epath_through_vset_subset) with (S1:=S); [eauto|left; auto]. 
@@ -164,7 +173,7 @@ Proof.
       pose proof Hq as Hq'.
       eapply is_epath_through_vset_split in Hq as [Hq|[p_pre [p_mid [p_suf [H_pre [H_suf [H_mid Heq]]]]]]]; auto.
       (* 路径 q 分解: u --p_pre--> k --p_mid--> k --p_suf--> k
-                        \__通过S__/   \_≥0环_/   \_≥0环_/
+                      \___通过S___/\___≥0环____/\___≥0环____/
          消除两个非负环后: u --p_pre----------------------> k 更优 *)
       destruct H_mid as [H_mid _]; apply non_neg_loop in H_mid.
       destruct H_suf as [H_suf _]; apply non_neg_loop in H_suf.
@@ -178,6 +187,7 @@ Proof.
       apply Z_op_plus_mono; auto.
 
 
+    (* 特殊情况：路径不存在 *)
     * right; split; auto.
       intros q Hq. 
       rewrite Z_op_none_le_iff. 
@@ -200,9 +210,12 @@ Proof.
         eapply is_epath_through_vset_subset with (S2:=S ∪ [k]) in Hq; [|left; auto].
         apply Hpmin; auto.
       + (* 最优路径 p 分解: u --p_pre--> k --p_mid--> k --p_suf--> k
-                           \__通过S__/   \_≥0环_/   \_≥0环_/
-           若环非零则矛盾；若是零环则取 p_pre 作为 S 中最优路径 *)
+                           \___通过S___/\___≥0环____/\___≥0环____/
+           若环非零则与 p 最短矛盾；若都是零环则取 p_pre 作为 S 中最优路径 *)
+
+
         destruct (classic (Z_op_le (epath_weight g (p_mid ++ p_suf)) (Some 0))).
+        (* 当 p_mid ++ p_suf 是正环时 *)
         2: {
           destruct d_uk. 2: {
             right; split; auto.
@@ -223,7 +236,9 @@ Proof.
           (rewrite Heq in H;
           rewrite epath_weight_app_assoc in H;
           rewrite Heq1, Heq2 in H;
-          inversion H). }
+          inversion H). } 
+
+        (* 当 p_mid ++ p_suf 是零环时 *)
         assert (epath_weight g (p_mid ++ p_suf) = Some 0). {
           destruct H_mid as [H_mid _].
           destruct H_suf as [H_suf _].
