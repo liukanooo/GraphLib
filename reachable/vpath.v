@@ -7,8 +7,8 @@ Require Import Coq.Logic.Classical_Prop.
 Require Import Coq.micromega.Psatz.
 Require Import SetsClass.SetsClass.
 Require Import ListLib.Base.Positional.
-From GraphLib Require Import graph_basic reachable_basic path path_basic Zweight.
-From ListLib Require Import Base.Inductive.
+From GraphLib Require Import graph_basic reachable_basic path.
+From ListLib Require Import Base.Inductive General.NoDup.
 
 Import SetsNotation.
 
@@ -188,7 +188,8 @@ Lemma valid_vpath_inv_1n:
 Proof.
   intros g u p v [Pp [Hvalid [Hvert [Hhd Htl]]]].
   pose proof (destruct_1n_spec g Pp Hvalid) as Hspec.
-  destruct (destruct_1n_path Pp).
+  destruct (destruct_1n_path g Pp Hvalid) eqn: ?; 
+  unfold path_cons_spec in *.
   - (* Case: Base Path *)
     subst Pp.
     rewrite empty_path_vertex in *.
@@ -241,11 +242,11 @@ Qed.
 Lemma valid_vpath_cons_inv:
   forall g u p v,
   valid_vpath g u (u :: p) v ->
-  p = nil \/ exists w, step g u w /\ valid_vpath g w p v.
+  (p = nil /\ u = v) \/ exists w, step g u w /\ valid_vpath g w p v.
 Proof.
   intros. 
   apply valid_vpath_inv_1n in H as [(-> & ?) | (w & p' & ? & ? & ?)]. 
-  - left; inversion H; reflexivity.
+  - left; inversion H; tauto.
   - right; exists w. 
     inversion H; subst. 
     split; auto.
@@ -313,7 +314,7 @@ Proof.
 Qed.
 
 (* vpath上对list V的1n归纳法则 *)
-Lemma valid_vpath_ind_1n:
+Theorem valid_vpath_ind_1n:
   forall g (P : V -> list V -> V -> Prop),
   (forall v, P v (v :: nil) v) ->
   (forall u v p w,
@@ -337,7 +338,7 @@ Proof.
 Qed.
 
 (* vpath上对list V的n1归纳法则 *)
-Lemma valid_vpath_ind_n1:
+Theorem valid_vpath_ind_n1:
   forall g (P : V -> list V -> V -> Prop),
   (forall v, P v (v :: nil) v) ->
   (forall u p v w,
@@ -446,6 +447,106 @@ Proof.
   - destruct IHrt as (p & ?).
     exists (u :: p). eapply valid_vpath_cons; eauto.
 Qed.
+
+(* vpath上的简单路径：不经过重复顶点 *)
+Definition is_simple_vpath (g: G) (u: V) (p: list V) (v: V): Prop :=
+  valid_vpath g u p v /\ NoDup p.
+
+(* 移除vpath中的环 *)
+Lemma valid_vpath_remove_cycle: 
+  forall g u v l1 x l2 l3,
+  valid_vpath g u (l1 ++ x :: l2 ++ x :: l3) v ->
+  valid_vpath g u (l1 ++ x :: l3) v.
+Proof.
+  intros.
+  rewrite app_comm_cons in H.
+  rewrite app_assoc in H. 
+  apply valid_vpath_app_inv in H as [H_first_part H_tail].
+  rewrite <- !app_assoc in H_first_part. 
+  rewrite <- app_comm_cons in H_first_part.
+  apply valid_vpath_app_inv in H_first_part.
+  destruct H_first_part as [H_head _]. 
+  pose proof (valid_vpath_app g u (l1 ++ x :: nil) x (x :: l3) v H_head H_tail).
+  simpl in H. 
+  rewrite <- app_assoc in H. 
+  exact H.
+Qed.
+
+(* 任意两点之间的vpath能够被转换为简单的vpath *)
+Theorem valid_vpath_simple:
+  forall g u p v,
+  valid_vpath g u p v ->
+  exists q, is_simple_vpath g u q v.
+Proof.
+  intros g u p v H_valid.
+  remember (length p) as n.
+  revert u p v H_valid Heqn.
+  induction n using lt_wf_ind; intros u p v H_valid Heqn.
+  destruct (classic (NoDup p)).
+  - exists p. split; auto.
+  - apply Nodup_exists_repetition in H0.
+    destruct H0 as [x [l1 [l2 [l3 H_eq]]]].
+    subst p.
+    set (p' := l1 ++ x :: l3).
+    assert (H_valid_p': valid_vpath g u p' v).
+    { unfold p'. eapply valid_vpath_remove_cycle. eassumption. }
+    assert (H_len: length p' < length (l1 ++ x :: l2 ++ x :: l3)). {
+      unfold p'.
+      rewrite !length_app; simpl.
+      rewrite !length_app; simpl.
+      lia. }
+    apply (H (length p')) in H_valid_p'; auto; lia.
+Qed.
+
+(* 这里先尝试一下两种through vset的定义是否等价，然后再测试一下是否好用。 *)
+(* vset就等于path去掉首尾后的所有点的集合 *)
+Definition is_vpath_through_exactly_vset 
+  (g: G) (u: V) (p: list V) (v: V) (vset: V -> Prop): Prop :=
+  valid_vpath g u p v /\ 
+  forall x, x ∈ vset <-> 
+  exists p1 p2, 
+    valid_vpath g u (u :: p1 ++ x :: nil) x /\ 
+    valid_vpath g x (x :: p2 ++ v :: nil) v /\ 
+    (u :: p1) ++ x :: (p2 ++ v :: nil) = p . 
+
+Theorem is_vpath_through_exactly_vset_correct: 
+  forall g u p v, 
+  valid_vpath g u p v ->
+  is_vpath_through_exactly_vset g u p v (fun x => In x (removelast (tl p))).
+Proof.
+  intros; split; [auto|split; intros]. 
+  - destruct p. 
+    1:{ exfalso. exact H0. } 
+    simpl in H0.
+    destruct (list_snoc_destruct p) as [|[? []]]; subst. 
+    1:{ exfalso. exact H0. } 
+    rewrite removelast_last in H0.  
+    apply in_split in H0 as [l1 [l2 H0]]; subst. 
+    assert (u = v0) by 
+    (apply valid_vpath_start in H as [? Heq]; inversion Heq; reflexivity); subst v0.  
+    assert (v = x0) by  
+    (apply valid_vpath_end in H as [? Heq]; 
+    rewrite app_comm_cons in Heq;
+    apply app_inj_tail_iff in Heq as []; auto); subst x0. 
+
+    rewrite <- app_assoc in H.
+    rewrite app_comm_cons in H. 
+     
+    exists l1, l2; repeat split.
+
+    * apply valid_vpath_app_inv in H as [? _]; auto. 
+    * apply valid_vpath_app_inv in H as [_ ?]; auto. 
+    * simpl; rewrite <- !app_assoc. 
+      rewrite <- !app_comm_cons.  
+      reflexivity. 
+  - destruct H0 as [p1 [p2 [Hp1 [Hp2 Heq]]]]; subst. 
+    simpl; rewrite app_comm_cons. 
+    rewrite app_assoc. 
+    rewrite removelast_last. 
+    apply in_or_app; right. 
+    apply in_eq.
+Qed.
+    
 
 End VPATH.
 

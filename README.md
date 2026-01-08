@@ -174,21 +174,82 @@ Class ConcatPath := {
 ### 可达性 (Reachability)
 
 ```coq
-(* 单步可达：存在一条边连接两个顶点 *)
-Definition step (g: G) (u v: V) : Prop :=
-  exists e, step_aux g e u v.
+Class Destruct1nPath := {
+  destruct_1n_path: P -> PathConsView;
+  destruct_1n_spec: forall g p, path_valid g p ->
+    match destruct_1n_path p with
+    | DestructBase1n v => 
+        p = empty_path v                    (* 空路径 *)
+    | DestructStep1n p' u v e =>
+        path_valid g p' /\
+        head p' = v /\
+        step_aux g e u v /\
+        p = concat_path (single_path u v e) p'   (* p = (u→v) ++ p' *)
+    end
+}.
+```
 
-(* 可达性：两个顶点之间存在路径（反自反传递闭包） *)
-Definition reachable (g: G) (u v: V) : Prop :=
-  clos_refl_trans (step g) u v.
+**分解模式**：`p = Empty(v)` 或 `p = Single(u→v) ++ Rest`
+
+**典型应用场景**：
+- 前向可达性证明（从起点 `u` 出发证明可以到达 `v`）
+- 构造从起点开始的路径
+- Dijkstra 算法等单源最短路径算法
+
+#### PathInd1n - 头部归纳
+
+```coq
+Class PathInd1n := {
+  path_ind1n: forall g (X: P -> Type)
+    (H_empty: forall v, X (empty_path v))
+    (H_step: forall u v e rest, 
+      step_aux g e u v -> 
+      path_valid g rest ->
+      head rest = v ->
+      X rest -> 
+      X (concat_path (single_path u v e) rest)),
+    forall p, path_valid g p -> X p
+}.
 ```
 
 **核心定理**：路径与可达性等价
 ```coq
-Theorem path_reachable_equivalence:
-  forall g u v,
-    (exists p, path_valid g p /\ head p = u /\ tail p = v) <->
-    reachable g u v.
+Class Destructn1Path := {
+  destruct_n1_path: P -> PathSnocView;
+  destruct_n1_spec: forall g p, path_valid g p ->
+    match destruct_n1_path p with
+    | DestructBasen1 p' v =>
+        p = empty_path v                    (* 空路径 *)
+    | DestructStepn1 p' u v e =>
+        path_valid g p' /\
+        tail p' = u /\
+        step_aux g e u v /\
+        p = concat_path p' (single_path u v e)   (* p = p' ++ (u→v) *)
+    end
+}.
+```
+
+**分解模式**：`p = Empty(v)` 或 `p = Rest ++ Single(u→v)`
+
+**典型应用场景**：
+- 后向可达性证明（证明从某点可以到达终点 `v`）
+- 从终点倒推构造路径
+- 路径末尾追加操作
+
+#### PathIndn1 - 尾部归纳
+
+```coq
+Class PathIndn1 := {
+  path_indn1: forall g (X: P -> Type)
+    (H_empty: forall v, X (empty_path v))
+    (H_step: forall u v e rest, 
+      step_aux g e u v -> 
+      path_valid g rest ->
+      tail rest = u ->
+      X rest -> 
+      X (concat_path rest (single_path u v e))),
+    forall p, path_valid g p -> X p
+}.
 ```
 
 ---

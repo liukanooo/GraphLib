@@ -293,7 +293,7 @@ Definition low_valid_v (v: V) (fun_low: V -> nat): Prop :=
   min_value_of_subset Nat.le
   (min_value_of_subset Nat.le (son v) fun_low ∪ 
   min_value_of_subset Nat.le (step_without_tree v ∪ [v]) dfn)
-  id (fun_low v).
+  (fun x => x) (fun_low v).
 
 
 Definition low_valid (fun_low: V -> nat): Prop := 
