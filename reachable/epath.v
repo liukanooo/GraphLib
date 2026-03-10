@@ -464,15 +464,17 @@ Definition is_epath_through_exactly_vset
     valid_epath g x p2 v /\ 
     p1 ++ p2 = p . 
 
+(* 路径的中间节点都在vset中 *)
 Definition is_epath_through_vset
   (g: G) (u: V) (p: list E) (v: V) (S: V -> Prop) : Prop :=
   valid_epath g u p v /\ 
   forall (p1 p2: list E) (x: V),
-    p1 <> nil ->       (* p1 非空，说明 x 不是起点 u *)
-    p2 <> nil ->       (* p2 非空，说明 x 不是终点 v *)
-    p = p1 ++ p2 ->    (* x 是切分点 *)
-    valid_epath g u p1 x -> (* x 是 p1 的终点 *)
-    x ∈ S.           (* 结论：中间点 x 必须在 S 中 *)
+    p1 <> nil ->
+    p2 <> nil ->
+    p = p1 ++ p2 ->
+    valid_epath g u p1 x ->
+    x ∈ S.
+
 
 #[export] Instance is_epath_through_vset_Proper:
   Proper (eq ==> eq ==> eq ==> eq ==> Sets.equiv ==> iff) is_epath_through_vset.
@@ -489,7 +491,8 @@ Proof.
     eapply (Hprop p1 p0); eauto.
 Qed. 
 
-(* 空路径（u 到 u）总是满足任意 S *)
+
+(* 空路径总是满足任意 S *)
 Lemma is_epath_through_vset_nil: 
   forall g u S,
     is_epath_through_vset g u nil u S.
@@ -499,7 +502,7 @@ Proof.
   - intros. destruct p1; simpl in *; try congruence.
 Qed.
 
-(* 单条边（u 到 v）总是满足任意 S *)
+(* 单条边总是满足任意 S *)
 Lemma is_epath_through_vset_single: 
   forall g u v e S,
     step_aux g e u v ->
@@ -512,7 +515,7 @@ Proof.
     inversion Hp; subst. 
     symmetry in H2; apply app_eq_nil in H2 as []; subst. 
     congruence. 
-Qed.
+Qed. 
 
 Lemma is_epath_through_vset_subset:
   forall g u p v S1 S2,
@@ -708,6 +711,60 @@ Proof.
 Qed.
 
 
+Theorem is_epath_through_vset_greedy_cut:
+  forall u p v S,
+    valid_epath g u p v ->
+    ~ v ∈ S ->
+    exists x p1 p2,
+      is_epath_through_vset g u p1 x S /\
+      ~ x ∈ S /\
+      valid_epath g x p2 v /\
+      p = p1 ++ p2.
+Proof. 
+  intros u p; revert u. 
+  induction p as [|e p IHp]; intros u v S Hvalid Hv.
+  1: { apply valid_epath_nil_inv in Hvalid; subst. 
+    exists v, nil, nil; split; [|split; [|split]]; auto. 
+    apply is_epath_through_vset_nil. 
+    apply valid_epath_empty. } 
+  apply valid_epath_cons_inv in Hvalid as [w [Hstep Hvalid_rest]].
+  specialize (IHp w v S Hvalid_rest Hv).
+  destruct IHp as [x [p1 [p2 [Hp1 [Hp2 [Hp Heq]]]]]].
+  destruct (classic (w ∈ S)) as [Hw | Hwn]. 
+  2: { 
+    exists w, (e :: nil), p; split; [|split; [|split]]; auto. 
+    apply is_epath_through_vset_single; auto. } 
+  exists x, (e :: p1), p2; split; [|split; [|split]]; auto.
+  * eapply (is_epath_through_vset_cons u e w p1 x); eauto. 
+  * rewrite Heq; auto. 
+Qed.  
+
+Theorem is_epath_through_vset_app_inv: 
+  forall u p1 p2 v S, 
+    is_epath_through_vset g u (p1 ++ p2) v S -> 
+    p1 <> nil -> 
+    p2 <> nil ->
+      exists x, x ∈ S /\ is_epath_through_vset g u p1 x S /\ is_epath_through_vset g x p2 v S.
+Proof.
+  intros u p1 p2 v S H Hp1 Hp2.
+  destruct H. 
+  apply valid_epath_app_inv in H as [k []]. 
+  exists k; split; [|split]. 
+  - eapply (H0 p1 p2); eauto. 
+  - split; auto. 
+    intros. 
+    pose proof H0 p0 (p3 ++ p2) x H2 
+    ltac:(destruct p3; [simpl; auto|symmetry; apply nil_cons])
+    ltac:(rewrite H4; rewrite app_assoc; auto) H5; auto.
+  - split; auto. 
+    intros. 
+    pose proof H0 (p1 ++ p0) p3 x
+    ltac:(destruct p1; [simpl; auto|symmetry; apply nil_cons]) H3
+    ltac:(rewrite H4; rewrite app_assoc; auto)
+    ltac:(eapply valid_epath_app; eauto); auto.
+Qed.
+
+
 (* 我们也可以基于epath进行最短路径的定义和证明。 *)
 
 Context {ew: EdgeWeight G E}. 
@@ -716,6 +773,17 @@ Local Open Scope Z.
 
 Definition epath_weight (g: G) (p: list E): option Z :=
   fold_right Z_op_plus (Some 0) (map (weight g) p). 
+
+Theorem epath_weight_cons:
+  forall g e p,
+    epath_weight g (e :: p) = Z_op_plus (weight g e) (epath_weight g p).
+Proof.
+  intros.
+  unfold epath_weight.
+  rewrite map_cons.
+  rewrite Zlist_sum_cons.
+  reflexivity.
+Qed.
 
 Theorem epath_weight_app_assoc:
   forall g p1 p2, 
@@ -738,6 +806,129 @@ Definition min_object_weight_epath_in_vset (g: G) (u: V) (v: V) (vset: V -> Prop
   min_object_of_subset Z_op_le (fun p => is_epath_through_vset g u p v vset) (epath_weight g) p. 
 
 Definition min_value_weight_epath_in_vset (g: G) (u: V) (v: V) (vset: V -> Prop) (z: option Z): Prop :=
-  min_value_of_subset_with_default Z_op_le (fun p => is_epath_through_vset g u p v vset) (epath_weight g) None z.  
+  min_value_of_subset_with_default Z_op_le (fun p => is_epath_through_vset g u p v vset) (epath_weight g) None z.     
 
+#[export] Instance min_value_weight_epath_in_vset_Proper:
+  Proper (eq ==> eq ==> eq ==> Sets.equiv ==> eq ==> iff) min_value_weight_epath_in_vset.
+Proof.
+  intros g1 g2 Heq_g u1 u2 Heq_u v1 v2 Heq_v vset1 vset2 Heq_vset z1 z2 Heq_z; 
+  subst; split; intros.
+  - destruct H as [[? _]|[]]; [left|right]. 
+    * split; [|destruct z2; simpl; auto]. 
+      destruct H as [p [[Hvalid Hmin] Hpeq]]. 
+      exists p; split; auto. 
+      split. 
+      + sets_unfold. 
+        rewrite <- Heq_vset; auto. 
+      + intros q Hq. 
+        apply Hmin. 
+        sets_unfold. 
+        rewrite Heq_vset; auto. 
+    * split; auto. 
+      intros; apply H. 
+      sets_unfold. 
+      rewrite Heq_vset; auto. 
+  - destruct H as [[? _]|[]]; [left|right]. 
+    * split; [|destruct z2; simpl; auto]. 
+      destruct H as [p [[Hvalid Hmin] Hpeq]]. 
+      exists p; split; auto. 
+      split. 
+      + sets_unfold. 
+        rewrite Heq_vset; auto. 
+      + intros q Hq. 
+        apply Hmin. 
+        sets_unfold. 
+        rewrite <- Heq_vset; auto. 
+    * split; auto. 
+      intros; apply H. 
+      sets_unfold. 
+      rewrite <- Heq_vset; auto. 
+Qed. 
+
+Theorem min_value_weight_epath_unique: 
+  forall u v z1 z2,
+    min_value_weight_epath g u v z1 ->
+    min_value_weight_epath g u v z2 ->
+    z1 = z2.
+Proof.
+  intros. 
+  destruct H as [[]|[]]; 
+  destruct H0 as [[]|[]]; subst.
+  - eapply min_unique; eauto; apply Z_op_le_TotalOrder.
+  - destruct z1; auto. 
+    destruct H as [p [[Hvalid _] Heq]]. 
+    pose proof H0 p Hvalid. 
+    rewrite Heq in H; simpl in H; contradiction.
+  - destruct z2; auto. 
+    destruct H0 as [p [[Hvalid _] Heq]]. 
+    pose proof H p Hvalid. 
+    rewrite Heq in H0; simpl in H0; contradiction.
+  - auto.
+Qed.
+
+Lemma min_value_weight_epath_in_vset_subset:
+  forall u v S1 S2 z1 z2, 
+    min_value_weight_epath_in_vset g u v S1 z1 ->
+    S1 ⊆ S2 ->
+    min_value_weight_epath_in_vset g u v S2 z2 ->
+    Z_op_le z2 z1.
+Proof.
+  intros. 
+  destruct H as [[? _]|[]]; 
+  destruct H1 as [[? _]|[]]; subst.
+  - destruct H as [p [[Hpvalid Hpmin] Hpeq]]. 
+    destruct H1 as [q [[Hqvalid Hqmin] Hqeq]]. 
+    eapply is_epath_through_vset_subset in Hpvalid; eauto.  
+    pose proof Hqmin p Hpvalid. 
+    rewrite <- Hpeq, <- Hqeq; auto. 
+  - destruct H as [p [[Hpvalid Hpmin] Hpeq]]. 
+    eapply is_epath_through_vset_subset in Hpvalid; eauto. 
+    pose proof H1 p Hpvalid. 
+    rewrite Hpeq in H; auto. 
+  - destruct z2; simpl; auto. 
+  - simpl; auto. 
+Qed. 
+
+Lemma min_value_weight_epath_in_vset_universe:
+  forall u v S z1 z2, 
+    min_value_weight_epath g u v z1 ->
+    min_value_weight_epath_in_vset g u v S z2 ->
+    Z_op_le z1 z2.
+Proof.
+  intros.
+  destruct H as [[? _]|[]]; 
+  destruct H0 as [[? _]|[]]; subst.
+  - destruct H as [p [[Hpvalid Hpmin] Hpeq]]. 
+    destruct H0 as [q [[Hqvalid Hqmin] Hqeq]]. 
+    destruct Hqvalid as [? _]. 
+    pose proof Hpmin q H. 
+    rewrite <- Hpeq, <- Hqeq; auto. 
+  - destruct z1; simpl; auto. 
+  - destruct H0 as [p [[Hpvalid Hpmin] Hpeq]]. 
+    destruct Hpvalid as [? _]. 
+    pose proof H p H0. 
+    rewrite Hpeq in H1; auto. 
+  - simpl; auto. 
+Qed. 
+
+Theorem min_value_weight_epath_in_vset_determin: 
+  forall u v S1 S2 z1 z2,
+    min_value_weight_epath g u v z1 ->
+    min_value_weight_epath_in_vset g u v S1 z1 ->
+    S1 ⊆ S2 ->
+    min_value_weight_epath_in_vset g u v S2 z2 ->
+    z1 = z2.
+Proof.
+  intros.
+  pose proof min_value_weight_epath_in_vset_subset _ _ _ _ _ _ H0 H1 H2 as Hge.
+  pose proof min_value_weight_epath_in_vset_universe _ _ _ _ _ H H2 as Hle.
+  destruct z1; destruct z2; simpl in *; try f_equal; try lia; auto.
+Qed.
+
+Theorem min_value_weight_epath_in_vset_exist: 
+  forall u v S, exists z, min_value_weight_epath_in_vset g u v S z.
+Proof.
+Admitted.
+
+(* 这几个min函数可以合并一下 *)
 End EPATH.

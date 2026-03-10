@@ -1,10 +1,11 @@
-(* Require Import Coq.Lists.List.
+Require Import Coq.Lists.List.
 Require Import Coq.ZArith.ZArith.
 Require Import Coq.Classes.Morphisms.
 Require Import Coq.Logic.Classical_Prop.
 Require Import Coq.micromega.Psatz.
 Require Import SetsClass.SetsClass.
 From GraphLib Require Import graph_basic reachable_basic path path_basic epath Zweight.
+From GraphLib Require Import floyd.
 From MaxMinLib Require Import MaxMin Interface.
 From ListLib Require Import Base.Inductive.
 
@@ -13,19 +14,16 @@ Import SetsNotation.
 Local Open Scope sets.
 Local Open Scope Z.
 
-(** 
-  Dijkstra 算法证明所需的辅助引理库
-  
-  本文件提供 Dijkstra 算法正确性证明所需的所有引理，
-  使用抽象的类型类定义，与 eweight.v 保持一致。
-*)
-
 Section dijkstra.
 
 Context {G V E: Type}
         {pg: Graph G V E}
         {gv: GValid G}
-        (g: G).
+        {step_valid: StepValid G V E}
+        {step_aux_unique: StepUniqueDirected G V E}
+        {simple_graph: SimpleGraph G V E}
+        (g: G)
+        {g_valid: gvalid g}.
 
 Context {P: Type}
         {path: Path G V E P}
@@ -39,276 +37,560 @@ Context {ew: EdgeWeight G E}.
 Notation step := (step g).
 Notation reachable := (reachable g).
 
+Context {src: V}.
 
-(** ===== 初始化相关引理 ===== *)
+Context {weight_nonneg: forall e, Z_op_le (Some 0) (weight g e)}. 
 
-(** 引理1: 路径权重的非负性 (由边权重非负推出) *)
-Lemma path_weight_nonneg: forall p,
-  path_valid g p ->
-  Z_op_le (Some 0) (path_weight g p).
-Proof. 
-Admitted.
-  
-(** 引理2：路径拼接的权重等于两段路径权重之和 *)
-Lemma path_concat_weight: 
-  forall (p1 p2: P),
-    path_valid g p1 ->
-    path_valid g p2 ->
-    tail p1 = head p2 ->
-    path_weight g (concat_path p1 p2) = Z_op_plus (path_weight g p1) (path_weight g p2).
+Theorem non_neg_epath: 
+  forall u p v, valid_epath g u p v -> Z_op_le (Some 0) (epath_weight g p).
 Proof.
-  intros.
-  unfold path_weight. 
-  rewrite concat_path_edge.
-  rewrite map_app.
-  rewrite Zlist_sum_app.
-  reflexivity.
+  intros u p v Hvalid. 
+  revert u v Hvalid.
+  induction p; intros.
+  - simpl. lia.
+  - apply valid_epath_cons_inv in Hvalid as [w [Hstep Hrest]]. 
+    pose proof IHp w v Hrest. 
+    pose proof weight_nonneg a. 
+    rewrite epath_weight_cons.
+    destruct (epath_weight g p); destruct (weight g a); simpl in *; try lia.
 Qed.
 
-(** 引理3: 路径扩展权重单调性 (Dijkstra 核心性质), 即路径的拼接会使路径的权重和增加 *)
-Lemma path_weight_monotone_prefix: forall p1 p2,
-  path_valid g p1 ->
-  path_valid g p2 ->
-  tail p1 = head p2 ->
-  Z_op_le (path_weight g p1) (path_weight g (concat_path p1 p2)).
+Lemma non_neg_loop: 
+  forall u p, valid_epath g u p u -> Z_op_le (Some 0) (epath_weight g p). 
+Proof. intros; eapply non_neg_epath; eauto. Qed.
+
+
+Lemma epath_weight_nil: 
+  epath_weight g nil = Some 0.
+Proof. unfold epath_weight; simpl; auto. Qed.
+
+Lemma epath_weight_single: 
+  forall e, epath_weight g (e :: nil) = weight g e.
 Proof.
-  intros.
-  rewrite path_concat_weight; auto.
-  pose proof path_weight_nonneg p1 H.
-  pose proof path_weight_nonneg p2 H0.
-  destruct (path_weight g p1); destruct (path_weight g p2); simpl in *; auto.
+  intros. unfold epath_weight; simpl. 
+  rewrite Z_op_plus_O_r. reflexivity. 
+Qed.
+
+Lemma valid_epath_non_neg:
+  forall u p v, 
+    valid_epath g u p v ->  
+    Z_op_le (Some 0) (epath_weight g p).
+Proof.  
+  eapply valid_epath_ind_1n; eauto. 
+  - intros; rewrite epath_weight_nil; simpl; lia.
+  - intros. rewrite epath_weight_cons.
+    pose proof weight_nonneg e. 
+    destruct (weight g e); destruct (epath_weight g p); simpl in *; auto. 
+    lia. 
+Qed.
+
+Lemma min_value_weight_epath_refl: 
+  forall v, 
+    min_value_weight_epath g v v (Some 0). 
+Proof.
+  intros; left; split; [|simpl; auto]. 
+  exists nil; split; [|unfold epath_weight; simpl; auto]. 
+  split; [apply valid_epath_empty|].
+  intros. 
+  rewrite epath_weight_nil. 
+  apply (valid_epath_non_neg v _ v); auto. 
+Qed. 
+
+Lemma min_value_weight_epath_in_vset_refl: 
+  forall v vset,
+    min_value_weight_epath_in_vset g v v vset (Some 0).
+Proof.
+  intros; left; split; [|simpl; auto].
+  exists nil; split; [|unfold epath_weight; simpl; auto].
+  split; [split; [apply valid_epath_empty|]|].
+  * intros.
+    destruct p1; destruct p2; try contradiction. 
+    exfalso; eapply nil_cons; eauto. 
+  * intros. 
+    rewrite epath_weight_nil. 
+    apply (valid_epath_non_neg v _ v). 
+    destruct H; auto. 
+Qed.
+
+
+Lemma nat_min_bounded: forall n (P: nat -> Prop),
+  (exists m, (m <= n)%nat /\ P m /\ forall k, (k < m)%nat -> ~ P k) \/ 
+  (forall m, (m <= n)%nat -> ~ P m).
+Proof.
+  intros n P0.
+  induction n as [|n IH].
+  - destruct (classic (P0 0%nat)) as [H0 | H0].
+    + left. exists 0%nat. split; [lia|]. split; [exact H0|]. 
+      intros k Hk; lia.
+    + right. intros m Hm. assert (m = 0%nat) by lia. subst. exact H0.
+  - destruct IH as [[m [Hle [Hpm Hmin]]] | Hnone].
+    + left. exists m. split; [lia|]. split; [exact Hpm|]. exact Hmin.
+    + destruct (classic (P0 (S n))) as [Hsn | Hsn].
+      * left. exists (S n). split; [lia|]. split; [exact Hsn|].
+        intros k Hk. apply Hnone. lia.
+      * right. intros m Hm. destruct (classic (m = S n)) as [Heq | Hneq].
+        -- subst. exact Hsn.
+        -- apply Hnone. lia.
+Qed.
+
+Lemma nat_min_strong: forall n (P: nat -> Prop), 
+  P n -> exists m, P m /\ forall x, P x -> (m <= x)%nat.
+Proof.
+  intros n P0 Hn.
+  destruct (nat_min_bounded n P0) as [[m [_ [Hpm Hmin]]] | Hnone].
+  - exists m. split; auto. intros x Hx.
+    destruct (classic (m <= x)%nat) as [Hle | Hgt]; auto.
+    assert (Hlt: (x < m)%nat) by lia.
+    apply Hmin in Hlt. contradiction.
+  - exfalso. apply (Hnone n); auto. 
+Qed.
+
+Lemma Z_min_strong: 
+  forall (z: Z) (P: Z -> Prop), 
+  P z -> 
+  (forall x, P x -> 0 <= x) -> 
+  exists m, P m /\ forall x, P x -> m <= x.
+Proof.
+  intros z P0 Hz Hpos.
+  set (Q := fun n => P0 (Z.of_nat n)).
+  assert (HQ: Q (Z.to_nat z)).
+  { unfold Q. rewrite Z2Nat.id; auto. }
+  destruct (nat_min_strong (Z.to_nat z) Q HQ) as [m_nat [Hm1 Hm2]].
+  exists (Z.of_nat m_nat). split; auto.
+  intros x Hx. 
+  pose proof (Hpos x Hx) as Hx0.
+  assert (HQx: Q (Z.to_nat x)).
+  { unfold Q. rewrite Z2Nat.id; auto. }
+  pose proof (Hm2 (Z.to_nat x) HQx) as Hle.
   lia.
 Qed.
 
-
-(** ===== 1. 初始化性质 ===== *)
-
-(** 引理4: (初始状态)
-  对于源点 src：
-  - dist[src] = g_zero，且这是真正的最短距离（空路径）
-  
-  对于其他顶点 v ≠ src：
-  - dist[v] = W_inf，表示通过空集不可达
-*)
-Lemma init_dist_from_source: forall (src: V),
-  min_weight_distance g src src (Some 0).
-Proof.
-  intros.
-  unfold min_weight_distance.
-  left. split; [|simpl; auto]. 
-  assert (Hweight: path_weight g (empty_path src) = Some 0).
-  { unfold path_weight. 
-    erewrite empty_path_edge; eauto. } 
-  exists (empty_path src); split; auto. 
-  split. 
-  * split; [|split]. 
-    + apply empty_path_valid. 
-    + apply Some_inversion. 
-      erewrite (head_valid g); [|apply empty_path_valid]. 
-      rewrite empty_path_vertex. 
-      reflexivity. 
-    + apply Some_inversion. 
-      erewrite (tail_valid g); [|apply empty_path_valid]. 
-      rewrite empty_path_vertex. 
-      reflexivity. 
-  * intros. 
-    rewrite Hweight. 
-    apply path_weight_nonneg. 
-    apply H. 
-Qed.
-
-(** 引理5: (初始状态)
-  对于其他顶点 v ≠ src，初始状态下通过空集不可达
-*)
-Lemma init_dist_others_unreachable: forall (v: V),
-  v <> src ->
-  min_weight_distance_in_vset g src v ∅ None.
+Theorem min_value_weight_epath_in_vset_exist: 
+  forall u v S, exists z, min_value_weight_epath_in_vset g u v S z. 
 Proof. 
   intros. 
-  unfold min_weight_distance_in_vset. 
-  right; split; [intros p Hp; exfalso|reflexivity]. 
-  destruct Hp as [Hpath Hbody].
-  destruct Hpath as [Hvalid [Hhd Htl]]. 
-  unfold interior in Hbody. 
-  destruct (vertex_in_path p) eqn:Heq. 
-  - eapply path_valid_vertex_not_nil; eauto. 
-  - simpl in Hbody. 
-    destruct l. 
-    * subst. 
-      apply H. 
-      apply Some_inversion. 
-      erewrite head_valid; eauto.
-      erewrite tail_valid; eauto. 
-      rewrite Heq. 
+  set (X := fun p => is_epath_through_vset g u p v S).
+  set (f := epath_weight g).
+  destruct (classic (exists p, X p /\ exists w, f p = Some w)) as [H_ex | H_none].
+  
+  - destruct H_ex as [p0 [Hp0 [w0 Hw0]]].
+    set (P_Z := fun w => exists p, X p /\ f p = Some w).
+    assert (HP0: P_Z w0).
+    { exists p0. split; auto. }
+    assert (Hpos: forall w, P_Z w -> 0 <= w).
+    { intros w [p [Hp Hpw]].
+      destruct Hp as [Hp_valid _]. (* is_epath_through_vset 蕴含 valid_epath *)
+      pose proof (valid_epath_non_neg u p v Hp_valid).
+      unfold f in Hpw. rewrite Hpw in H.
+      simpl in H. lia. 
+    }
+    destruct (Z_min_strong w0 P_Z HP0 Hpos) as [m [Hm_prop Hm_min]].
+    destruct Hm_prop as [p_min [Hp_min Hf_min]].
+
+    exists (Some m).
+    unfold min_value_of_subset_with_default.
+    left. split.
+    + unfold min_value_of_subset.
+      exists p_min. split; auto.
+      unfold min_object_of_subset.
+      split; auto.
+      intros b Hb.
+      destruct (f b) as [wb |] eqn:Hfb.
+      * assert (Hb_PZ: P_Z wb).
+        { exists b. split; auto. }
+        pose proof (Hm_min wb Hb_PZ) as Hle.
+        subst f.
+        rewrite Hf_min, Hfb. 
+        simpl. lia.
+      * subst f.
+        rewrite Hf_min, Hfb.
+        apply Z_op_le_none_r. 
+    + apply Z_op_le_none_r.
+
+  - 
+    exists None.
+    unfold min_value_of_subset_with_default.
+    right. split; auto.
+    intros a Ha.
+    destruct (f a) as [wa |] eqn:Hfa.
+    + exfalso. apply H_none.
+      exists a. split; auto. exists wa. auto.
+    + apply Z_op_none_le_iff. 
+      subst f; auto.
+Qed. 
+
+
+Theorem greedy_choice_correct: 
+  forall u S dist, 
+    (forall v, ~ v ∈ S -> min_value_weight_epath_in_vset g src v S (dist v)) ->  
+    min_object_of_subset Z_op_le (fun v => ~ v ∈ S) dist u -> 
+    min_value_weight_epath g src u (dist u).
+(*
+Visited Set (S)                       Unvisited Set (V \ S)
+  ┌───────────────────────┐             ┌──────────────────────────────────┐
+  │                       │             │                                  │
+  │               (dist u)├─────────────────> [u] (Current min dist)       │
+  │              /        │             │      ^                           │
+  │ [src] ~~~~~~*         │             │      | (w >= 0)                  │
+  │              \        │             │      |                           │
+  │               (dist x)├────> [x] ~~~~~~~~~~+ (Hypothetical shorter path│
+  │                       │      ^      │        which is impossible)      │
+  └───────────────────────┘      |      └──────────────────────────────────┘
+                                 |
+                          Any path escaping S MUST 
+                          pass through some node x.
+                          Since w >= 0, dist(u) <= dist(x) <= dist(x) + w(x->u)
+*)
+Proof. 
+  intros u S dist H_inv Hu. 
+  destruct Hu as [H_uS Hu_min]. 
+  pose proof H_inv u H_uS as [[[p [[Hp_valid Hp_min]]] Hpnone]|[H_min H_none]].
+  - (* dist u = Some *)
+    left; split; auto. 
+    exists p; split; auto. 
+    split; [apply Hp_valid|intros q Hq]. 
+    eapply is_epath_through_vset_greedy_cut in Hq; eauto. 
+    destruct Hq as [x [p_in [p_out [H_pin [H_x [H_pout H_eq]]]]]]. 
+    pose proof H_inv x H_x as Hx_min. 
+    destruct Hx_min as [[[r [[Hr_valid Hr_min] Hr_none]] _]|[H_none _]]. 
+    * pose proof Hr_min p_in H_pin as Hr_min. 
+      pose proof Hu_min x H_x as Hx_min. 
+      rewrite Hr_none in Hr_min. 
+      rewrite H. 
+      rewrite H_eq. 
+      rewrite epath_weight_app_assoc. 
+      apply Z_op_le_trans with (y := dist x); auto. 
+      apply Z_op_le_trans with (y := epath_weight g p_in); auto. 
+      pose proof non_neg_epath _ _ _ H_pout as H_pout_pos. 
+      rewrite <- Z_op_plus_O_r at 1. 
+      apply Z_op_plus_mono; auto. 
+      apply Z_op_le_refl. 
+    * pose proof H_none p_in H_pin as Hx_none. 
+      rewrite Z_op_none_le_iff in Hx_none. 
+      rewrite H_eq. 
+      rewrite epath_weight_app_assoc. 
+      rewrite Hx_none. 
+      apply Z_op_le_none_r. 
+  - (* dist u = None *)
+    rewrite H_none. 
+    right; split; auto. 
+    intros p Hp. 
+    rewrite Z_op_none_le_iff. 
+    eapply is_epath_through_vset_greedy_cut in Hp; eauto.  
+    destruct Hp as [x [p_in [p_out [H_pin [H_x [H_pout H_eq]]]]]]. 
+    pose proof Hu_min x H_x as Hx_none. 
+    rewrite H_none in Hx_none. 
+    rewrite Z_op_none_le_iff in Hx_none. 
+    pose proof H_inv x H_x as Hx_min. 
+    rewrite Hx_none in Hx_min. 
+    destruct Hx_min as [[[px [[Hpxvalid Hpxmin] Hpnone]] _]|[Hnone _]]. 
+    * pose proof Hpxmin p_in H_pin. 
+      rewrite Hpnone in H. 
+      rewrite Z_op_none_le_iff in H. 
+      rewrite H_eq. 
+      rewrite epath_weight_app_assoc. 
+      rewrite H. 
       reflexivity. 
-    * subst. 
-      destruct l. 
-      + simpl in Hbody. 
-      Print removelast.  
-      simpl in Hbody. 
-Admitted.
-
-(** ===== 2. 路径结构引理 (关键分解) ===== *)
-
-(**
-  First-Exit Decomposition (首次离开分解引理)
-  
-  这是证明 Dijkstra 贪心选择性质最关键的步骤。
-  如果一条从 src 到 u 的路径 p (u ∉ visited) 存在，且 src ∈ visited，
-  那么 p 可以分解为 p_pre ++ (x, y) ++ p_rem，其中：
-  1. p_pre 完全在 visited 内部 (中间节点 ∈ visited，终点 x ∈ visited)
-  2. (x, y) 是第一条离开 visited 的边 (x ∈ visited, y ∉ visited)
-  3. p_rem 是剩余路径
-*)
-Lemma path_first_exit_decomposition: 
-  forall (u: V) (p: P) (visited: V -> Prop),
-    path_valid g p ->
-    head p = src ->
-    tail p = u ->
-    src ∈ visited ->
-    ~ u ∈ visited ->
-    exists p_pre x y e p_rem,
-      (* 结构分解 *)
-      p = concat_path (concat_path p_pre (single_path x y e)) p_rem /\
-      path_valid g p_pre /\
-      path_valid g p_rem /\
-      step_aux g e x y /\
-      (* 集合性质 *)
-      is_path_through_vset g p_pre src x visited /\  (* p_pre 中间点在 visited 中 *)
-      x ∈ visited /\
-      ~ y ∈ visited. (* y 是第一个未访问点 *)
-Admitted.
-
-(** ===== 辅助工具 ===== *)
-
-(** 三角不等式 (用于通用的距离性质推导) *)
-Lemma triangle_inequality:
-  forall (u v w: V) (d_uw d_uv d_vw: option Z),
-    min_weight_distance g u w d_uw ->
-    min_weight_distance g u v d_uv ->
-    min_weight_distance g v w d_vw ->
-    Z_op_le d_uw (Z_op_plus d_uv d_vw).
-Admitted.
-
-(** 集合单调性 *)
-Lemma min_distance_vset_monotone:
-  forall (u v: V) (vset1 vset2: V -> Prop) (d1 d2: option Z),
-    min_weight_distance_in_vset g u v vset1 d1 ->
-    min_weight_distance_in_vset g u v vset2 d2 ->
-    vset1 ⊆ vset2 ->
-    Z_op_le d2 d1.
-Admitted.
+    * pose proof Hnone p_in H_pin. 
+      rewrite Z_op_none_le_iff in H. 
+      rewrite H_eq. 
+      rewrite epath_weight_app_assoc. 
+      rewrite H. 
+      reflexivity. 
+  Unshelve. auto. auto. 
+Qed.
 
 
-(** ===== 松弛操作相关引理 ===== *)
-
-(**
-  Dijkstra 松弛操作的正确性
-  
-  假设：
-  - dist[u] 已经是从 src 到 u 的最短距离
-  - dist[v] 是从 src 到 v、仅通过 visited 的最短距离
-  - 存在边 e: u -> v，权重为 w_e
-  
-  则：松弛后 dist[v] = min(dist[v], dist[u] + w_e) 是
-      从 src 到 v、仅通过 visited ∪ {u} 的最短距离
-  
-  证明思路：
-  1. 下界：任何通过 visited ∪ {u} 的路径权重 ≥ min(dist[v], dist[u] + w_e)
-     - 不经过 u：权重 ≥ dist[v]
-     - 经过 u：最短的是 src ~> u -> v，权重 ≥ dist[u] + w_e
-  2. 可达：存在路径达到这个下界
-*)
-Lemma dijkstra_relax_correct:
-  forall (src u v: V) (visited: V -> Prop) (e: E) 
-         (dist_u dist_v w_e: option Z),
-    (* 前提条件 *)
-    u ∈ visited ->  (* u 已经被访问 *)
-    step_aux g e u v ->  (* 存在边 u -> v *)
-    weight g e = w_e ->
-    (* dist[u] 是最终的最短距离 *)
-    min_weight_distance g src u dist_u ->
-    (* dist[v] 是通过 visited 的最短距离 *)
-    min_weight_distance_in_vset g src v visited dist_v ->
-    (* 结论：松弛后是通过 visited ∪ {u} 的最短距离 *)
-    min_weight_distance_in_vset g src v (visited ∪ [u]) 
-      (Z_op_min dist_v (Z_op_plus dist_u w_e)).
-Admitted.
-
-
-(** ===== 贪心选择的正确性引理 ===== *)
-
-(**
-  贪心选择引理（Dijkstra 算法的核心）
-  
-  假设：
-  - 所有已访问顶点的 dist 值都是最终的最短距离
-  - 所有未访问顶点的 dist 值是仅通过已访问顶点的最短距离
-  - 选择 dist 值最小的未访问顶点 u
-  
-  则：dist[u] 已经是从 src 到 u 的真正最短距离
-  
-  证明（反证法）：
-  假设存在更短的路径 P: src ~> u，权重 < dist[u]。
-  
-  考虑 P 上第一个离开 visited 集合的顶点 v：
-  - v 的前驱 w 在 visited 中
-  - 根据循环不变量，dist[w] = 真正的最短距离到 w
-  - 经过 w 到达 v 的路径权重 ≥ dist[w] + weight(w, v)
-  - 根据循环不变量，dist[v] ≤ dist[w] + weight(w, v)
-    （因为 dist[v] 是通过 visited 的最短距离，包括经过 w 的路径）
-  
-  所以：dist[v] ≤ weight(P 的前缀到 v) < weight(P) < dist[u]
-  
-  但这与"选择了 u"矛盾，因为我们应该选择 dist 值最小的顶点 v。
-  
-  关键：这个证明依赖于边权重非负！
-*)
-Lemma greedy_choice_correct:
-  forall (src u: V) (visited: V -> Prop) (dist: V -> option Z),
-    (* 前提：循环不变量成立 *)
-    (forall v, v ∈ visited -> min_weight_distance g src v (dist v)) ->
-    (forall v, ~ v ∈ visited -> min_weight_distance_in_vset g src v visited (dist v)) ->
-    (* u 是未访问顶点中 dist 值最小的 *)
-    ~ u ∈ visited ->
-    dist u <> None ->
-    (forall v, ~ v ∈ visited -> dist v <> None -> Z_op_le (dist u) (dist v)) ->
-    (* 结论：dist[u] 是最终的最短距离 *)
-    min_weight_distance g src u (dist u).
+Theorem visited_keep: 
+  forall u v S e dist, 
+    min_value_weight_epath g src v (dist v) -> 
+    min_value_weight_epath_in_vset g src u S (dist u) -> 
+    step_aux g e u v -> 
+    Z_op_le (dist v) (Z_op_plus (dist u) (weight g e)).
+(* 
+  [src] ~~~~(dist u)~~~> [u] --- (edge e, weight w) ---> [v] (Already Globally Min)
+    |                                                      ^
+    |                                                      |
+    +~~~~~~~~~~~~~~~~(dist v)~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~+
+                (Global Min Path) 
+  If [v] is already known to be globally minimum, 
+  Dist(v) <= Dist(u) + w(u,v) ALWAYS holds. 
+  (Because otherwise, Dist(v) wasn't the global minimum to begin with!)
+ *)
 Proof.
-  intros src u visited dist H_visited_correct H_unvisited_optimal 
-         H_u_unvisited H_u_finite H_u_minimal.
-  (* 
-    证明提示：
-    1. 使用反证法：假设存在更短的路径 P
-    2. 分析 P 上第一个离开 visited 的顶点
-    3. 使用非负权重性质
-    4. 推导矛盾
-    
-    需要的辅助引理：
-    - 路径分解：可以在任意顶点分解路径
-    - 权重单调性：部分路径权重 ≤ 完整路径权重（非负权重）
-    - 最短距离的下界性质
-  *)
-Admitted.
+  intros u v S e dist Hminv Hminu Hstep. 
+  destruct Hminu as [[Hu _]|[]]; 
+  destruct Hminv as [[Hv _]|[]]. 
+  - destruct Hu as [Hupath [[Huvalid Humin] Hueq]].
+    destruct Hv as [Hvpath [[Hvvalid Hvmin] Hveq]]. 
+    pose proof Hvmin (Hupath ++ e :: nil)
+    ltac:(apply valid_epath_snoc with (v:=u); eauto; apply Huvalid). 
+    rewrite <- Hveq, <- Hueq. 
+    rewrite epath_weight_app_assoc in H. 
+    rewrite epath_weight_single in H. auto. 
+  - destruct Hu as [Hupath [[Huvalid Humin] Hueq]]. 
+    pose proof H (Hupath ++ e :: nil)
+    ltac:(apply valid_epath_snoc with (v:=u); eauto; apply Huvalid). 
+    rewrite <- Hueq, H0. 
+    rewrite epath_weight_app_assoc in H1. 
+    rewrite epath_weight_single in H1. auto. 
+  - rewrite H0. 
+    simpl. 
+    destruct (dist v); simpl; auto; lia. 
+  - rewrite H0. 
+    simpl. 
+    destruct (dist v); simpl; auto; lia. 
+Qed. 
 
-
-(** ===== 非负权重的性质引理 ===== *)
-
-(**
-  路径延长不会减少权重（非负权重的关键性质）
-  
-  如果 p1 是 p2 的前缀，则 weight(p1) ≤ weight(p2)
+Theorem relax_edge_correct: 
+  forall u v e S dist, 
+    (forall v, v ∈ S -> min_value_weight_epath g src v (dist v) /\  
+                         min_value_weight_epath_in_vset g src v S (dist v)) -> 
+    (forall v, ~ v ∈ S -> min_value_weight_epath_in_vset g src v S (dist v)) ->  
+    (forall u v, u ∈ S -> ~ v ∈ S -> Z_op_le (dist u) (dist v)) ->
+    ~ u ∈ S -> 
+    ~ v ∈ S -> 
+    step_aux g e u v -> 
+    min_value_weight_epath_in_vset g src v (S ∪ [u]) 
+    (Z_op_min (dist v) (Z_op_plus (dist u) (weight g e))). 
+(* 
+   ┌──────────────────────── 集合 S ────────────────────────┐
+   │                                                        │
+   │                           dist(x)                      │w(x ↝ v)
+   │     ┌─────────────────────────────────────────> [x] ───┼─────────[v](未访问节点)
+   │     │                                            ^     │         │
+   │     │                                            │     │         │
+   │   [src]                                          │     │         │
+   │     │                                            │     │         │
+   │     │ dist(u)                                    │     │         │
+   │     │                                            │     │         │
+   └─────┼────────────────────────────────────────────┼─────┘         │
+         v                                            │               │
+        [u] ─────────────── w(u ↝ x) ────────────────┘               │
+    (新加入节点)             (折返现象)                                │
+         │                                                            │
+         └──────────────────────── edge(u, v) ────────────────────────┘
+                                 (正常松弛边)
 *)
-Lemma path_extension_weight_monotone:
-  forall (u v w: V) (p_short p_long: P),
-    is_path g p_short u v ->
-    is_path g p_long u w ->
-    In v (vertex_in_path p_long) ->
-    (* p_short 相当于 p_long 的前缀 *)
-    Z_op_le (path_weight g p_short) (path_weight g p_long).
-Admitted.
+Proof.
+  intros u v e S dist H_inv1 H_inv2 Hcross H_uS H_vS H_step. 
 
+  pose proof H_inv2 u H_uS as Hdistu. 
+  pose proof H_inv2 v H_vS as Hdistv.  
+  pose proof min_value_weight_epath_in_vset_exist u v S as [z Hz]. 
+  pose proof @floyd_warshall_step_spec _ _ _ _ _ _ g g_valid 
+    _ _ _ _ _ _ _ non_neg_loop 
+    S src v u (dist v) (dist u) z 
+    Hdistv Hdistu Hz.
+  destruct Hz as [[[p [[Hpvalid Hpmin] Hpeq]] _]|[]]. 
+
+  - assert (Z_op_le z (weight g e)) as Hze. { 
+      pose proof Hpmin (e :: nil) ltac:(eapply is_epath_through_vset_single; eauto). 
+      rewrite <- Hpeq. 
+      rewrite epath_weight_cons in H0.  
+      rewrite epath_weight_nil in H0. 
+      rewrite Z_op_plus_O_r in H0. auto. 
+    }
+    destruct p as [|e' p'].  
+    1: { 
+      (* u = v的平凡情形 *)
+      destruct Hpvalid as [Hpvalid _]. 
+      eapply valid_epath_nil_inv in Hpvalid; subst. 
+      unfold epath_weight in H; simpl in H; rewrite Z_op_plus_O_r in H; auto. 
+      assert (Z_op_min (dist v) (dist v) = dist v) by (destruct (dist v); simpl; try f_equal; lia). 
+      rewrite H0 in H. 
+      assert (Z_op_min (dist v) (Z_op_plus (dist v) (weight g e)) = (dist v)). 
+      apply Z_op_le_min_l; rewrite <- Z_op_plus_O_r at 1; apply Z_op_plus_mono; auto. 
+      destruct (dist v); simpl in *; try lia. 
+      rewrite H1; auto. 
+    } 
+    destruct p' as [|a q]. 
+    1: {
+      (* u v之间的最短路径是e的简单情形 *)
+      rewrite epath_weight_single in Hpeq. 
+      destruct Hpvalid as [Hpvalid _]. 
+      apply valid_epath_single_inv in Hpvalid. 
+      eapply no_multiple_edge with (e2:=e') in H_step; eauto. 
+      subst; auto.
+    }
+    (* u v之间的最短路径经过了S中的顶点x *)
+
+    pose proof Hpvalid as Hpvalid'. 
+    assert (e' :: a :: q = (e' :: nil) ++ (a :: q)) as Htemp by (simpl; auto); 
+    rewrite Htemp in Hpvalid; clear Htemp.
+    apply is_epath_through_vset_app_inv in Hpvalid as [x [Hx [Hux Hxv]]]; try (symmetry; apply nil_cons).  
+    assert (Z_op_le (dist v) (Z_op_plus (dist u) z)). {
+       (* 此时u到v的最短距离不大于dist u - dist v *)
+      destruct Hdistu as [[Hu _]|[]];  
+      destruct Hdistv as [[Hv _]|[]].
+      * (* dist u = Some, dist v = Some*)
+        destruct Hu as [Hupath [[Huvalid Humin] Hueq]].
+        destruct Hv as [Hvpath [[Hvvalid Hvmin] Hveq]].
+        (* rewrite <- Hueq, <- Hveq.  *)
+        pose proof H_inv1 x Hx as [_ Hx_min].  
+        pose proof Hx_min as [[[Hxpath [[Hxvalid Hxmin] Hxeq]] _]|[]]. 
+        + (* dist x = Some *)
+          pose proof Hvmin (Hxpath ++ a :: q). 
+          assert (Hxpath ++ a :: q ∈ (fun p : list E => is_epath_through_vset g src p v S)) as Hle1
+          by (eapply (is_epath_through_vset_app src); eauto; apply Hxvalid).
+          apply H0 in Hle1. 
+          rewrite Hveq in Hle1. 
+          eapply Z_op_le_trans; eauto. 
+          rewrite! epath_weight_app_assoc. 
+          rewrite Hxeq. 
+          rewrite <- Hpeq; rewrite! epath_weight_cons. 
+          apply Z_op_plus_mono; auto.  
+          rewrite <- Z_op_plus_O_l at 1. 
+          apply Z_op_plus_mono; auto. 
+          apply Z_op_le_refl. 
+        + pose proof Hcross x u Hx H_uS. 
+          rewrite H1 in H2. 
+          rewrite Z_op_none_le_iff in H2. 
+          rewrite H2. 
+          simpl; destruct (dist v); simpl; auto. 
+      * pose proof H_inv1 x Hx as [_ Hx_min].  
+        pose proof Hx_min as [[[Hxpath [[Hxvalid Hxmin] Hxeq]] _]|[]]. 
+        + assert (Hxpath ++ a :: q ∈ (fun p : list E => is_epath_through_vset g src p v S)) as Hle1
+          by (eapply (is_epath_through_vset_app src); eauto; apply Hxvalid).
+          apply H0 in Hle1. 
+          rewrite <- H1 in Hle1. 
+          eapply Z_op_le_trans; eauto. 
+          rewrite! epath_weight_app_assoc. 
+          rewrite Hxeq. 
+          rewrite <- Hpeq; rewrite! epath_weight_cons. 
+          apply Z_op_plus_mono; auto.  
+          rewrite <- Z_op_plus_O_l at 1. 
+          apply Z_op_plus_mono; auto. 
+          apply Z_op_le_refl. 
+        + pose proof Hcross x u Hx H_uS. 
+          rewrite H3 in H4. 
+          rewrite Z_op_none_le_iff in H4. 
+          rewrite H4. 
+          simpl; destruct (dist v); simpl; auto. 
+      * rewrite H1; simpl. 
+        destruct (dist v); simpl; auto. 
+      * rewrite H1; simpl. 
+        destruct (dist v); simpl; auto.      
+    }
+  rewrite Z_op_le_min_l in H by auto. 
+  rewrite Z_op_le_min_l; auto. 
+  eapply Z_op_le_trans; eauto. 
+  apply Z_op_plus_mono; auto. 
+  destruct (dist u); simpl; auto; lia. 
+  - pose proof H0 (e :: nil) ltac:(eapply is_epath_through_vset_single; eauto). 
+    rewrite Z_op_none_le_iff in H2. 
+    rewrite epath_weight_single in H2. 
+    rewrite H1 in H; rewrite H2; auto. 
+  Unshelve. auto. auto. 
+Qed. 
+
+Theorem relax_edge_correct': 
+  forall u v S dist, 
+    (forall v, v ∈ S -> min_value_weight_epath g src v (dist v) /\  
+                         min_value_weight_epath_in_vset g src v S (dist v)) -> 
+    (forall v, ~ v ∈ S -> min_value_weight_epath_in_vset g src v S (dist v)) ->  
+    (forall u v, u ∈ S -> ~ v ∈ S -> Z_op_le (dist u) (dist v)) ->
+    ~ u ∈ S -> 
+    ~ v ∈ S -> 
+    (~ exists e, step_aux g e u v) -> 
+    min_value_weight_epath_in_vset g src v (S ∪ [u]) (dist v). 
+Proof.
+  intros u v S dist H_inv1 H_inv2 Hcross H_uS H_vS H_nostep. 
+
+  pose proof H_inv2 u H_uS as Hdistu. 
+  pose proof H_inv2 v H_vS as Hdistv.  
+  pose proof min_value_weight_epath_in_vset_exist u v S as [z Hz]. 
+  (* 应用 Floyd-Warshall 步骤定理 *)
+  pose proof @floyd_warshall_step_spec _ _ _ _ _ _ g g_valid 
+    _ _ _ _ _ _ _ non_neg_loop 
+    S src v u (dist v) (dist u) z 
+    Hdistv Hdistu Hz.
+  destruct Hz as [[[p [[Hpvalid Hpmin] Hpeq]] _]|[]]. 
+
+  - destruct p as [|e' p'].  
+    1: { 
+      (* u = v的平凡情形 *)
+      destruct Hpvalid as [Hpvalid _]. 
+      eapply valid_epath_nil_inv in Hpvalid; subst. 
+      unfold epath_weight in H; simpl in H; rewrite Z_op_plus_O_r in H; auto. 
+      assert (Z_op_min (dist v) (dist v) = dist v) by (destruct (dist v); simpl; try f_equal; lia). 
+      rewrite H0 in H; auto. 
+    } 
+    destruct p' as [|a q]. 
+    1: {
+      (* u v之间的最短路径是e的简单情形 *)
+      rewrite epath_weight_single in Hpeq. 
+      destruct Hpvalid as [Hpvalid _]. 
+      apply valid_epath_single_inv in Hpvalid. 
+      exfalso; apply H_nostep; exists e'; auto.
+    }
+    (* u v之间的最短路径经过了S中的顶点x *)
+
+    pose proof Hpvalid as Hpvalid'. 
+    assert (e' :: a :: q = (e' :: nil) ++ (a :: q)) as Htemp by (simpl; auto); 
+    rewrite Htemp in Hpvalid; clear Htemp.
+    apply is_epath_through_vset_app_inv in Hpvalid as [x [Hx [Hux Hxv]]]; try (symmetry; apply nil_cons).  
+    assert (Z_op_le (dist v) (Z_op_plus (dist u) z)). {
+       (* 此时u到v的最短距离不大于dist u - dist v *)
+      destruct Hdistu as [[Hu _]|[]];  
+      destruct Hdistv as [[Hv _]|[]].
+      * (* dist u = Some, dist v = Some*)
+        destruct Hu as [Hupath [[Huvalid Humin] Hueq]].
+        destruct Hv as [Hvpath [[Hvvalid Hvmin] Hveq]].
+        (* rewrite <- Hueq, <- Hveq.  *)
+        pose proof H_inv1 x Hx as [_ Hx_min].  
+        pose proof Hx_min as [[[Hxpath [[Hxvalid Hxmin] Hxeq]] _]|[]]. 
+        + (* dist x = Some *)
+          pose proof Hvmin (Hxpath ++ a :: q). 
+          assert (Hxpath ++ a :: q ∈ (fun p : list E => is_epath_through_vset g src p v S)) as Hle1
+          by (eapply (is_epath_through_vset_app src); eauto; apply Hxvalid).
+          apply H0 in Hle1. 
+          rewrite Hveq in Hle1. 
+          eapply Z_op_le_trans; eauto. 
+          rewrite! epath_weight_app_assoc. 
+          rewrite Hxeq. 
+          rewrite <- Hpeq; rewrite! epath_weight_cons. 
+          apply Z_op_plus_mono; auto.  
+          rewrite <- Z_op_plus_O_l at 1. 
+          apply Z_op_plus_mono; auto. 
+          apply Z_op_le_refl. 
+        + pose proof Hcross x u Hx H_uS. 
+          rewrite H1 in H2. 
+          rewrite Z_op_none_le_iff in H2. 
+          rewrite H2. 
+          simpl; destruct (dist v); simpl; auto. 
+      * pose proof H_inv1 x Hx as [_ Hx_min].  
+        pose proof Hx_min as [[[Hxpath [[Hxvalid Hxmin] Hxeq]] _]|[]]. 
+        + assert (Hxpath ++ a :: q ∈ (fun p : list E => is_epath_through_vset g src p v S)) as Hle1
+          by (eapply (is_epath_through_vset_app src); eauto; apply Hxvalid).
+          apply H0 in Hle1. 
+          rewrite <- H1 in Hle1. 
+          eapply Z_op_le_trans; eauto. 
+          rewrite! epath_weight_app_assoc. 
+          rewrite Hxeq. 
+          rewrite <- Hpeq; rewrite! epath_weight_cons. 
+          apply Z_op_plus_mono; auto.  
+          rewrite <- Z_op_plus_O_l at 1. 
+          apply Z_op_plus_mono; auto. 
+          apply Z_op_le_refl. 
+        + pose proof Hcross x u Hx H_uS. 
+          rewrite H3 in H4. 
+          rewrite Z_op_none_le_iff in H4. 
+          rewrite H4. 
+          simpl; destruct (dist v); simpl; auto. 
+      * rewrite H1; simpl. 
+        destruct (dist v); simpl; auto. 
+      * rewrite H1; simpl. 
+        destruct (dist v); simpl; auto.      
+    }
+  rewrite Z_op_le_min_l in H by auto. 
+  auto.
+  - rewrite H1 in H. 
+    rewrite Z_op_plus_none_r in H. 
+    rewrite Z_op_min_none_r in H. 
+    auto. 
+  Unshelve. auto. auto. 
+Qed. 
 
 End dijkstra.
- *)
+
