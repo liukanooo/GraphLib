@@ -23,7 +23,7 @@ reachable/Zweight.v reachable/eweight.v
 DIRECTED_FILES = directed/rootedtree.v directed/dfstree.v
 SUBGRAPH_FILES = subgraph/subgraph.v
 UNDIRECTED_FILES = undirected/undirected_basic.v undirected/tree.v
-EXAMPLES_FILES = examples/floyd.v examples/dijkstra.v examples/prim.v examples/kruskal.v examples/tarjan.v
+EXAMPLES_FILES = examples/floyd.v examples/dijkstra.v examples/prim.v examples/kruskal.v examples/dfs.v examples/tarjan.v 
 
 FILES = \
  $(BASE_FILES) \
