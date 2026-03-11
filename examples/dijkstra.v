@@ -39,9 +39,11 @@ Notation reachable := (reachable g).
 
 Context {src: V}.
 
+(* Dijkstra成立的充分条件：没有负边 *)
 Context {weight_nonneg: forall e, Z_op_le (Some 0) (weight g e)}. 
 
-Theorem non_neg_epath: 
+(* 基于没有负边的一些简单事实 *)
+Lemma non_neg_epath: 
   forall u p v, valid_epath g u p v -> Z_op_le (Some 0) (epath_weight g p).
 Proof.
   intros u p v Hvalid. 
@@ -59,26 +61,14 @@ Lemma non_neg_loop:
   forall u p, valid_epath g u p u -> Z_op_le (Some 0) (epath_weight g p). 
 Proof. intros; eapply non_neg_epath; eauto. Qed.
 
-
-Lemma epath_weight_nil: 
-  epath_weight g nil = Some 0.
-Proof. unfold epath_weight; simpl; auto. Qed.
-
-Lemma epath_weight_single: 
-  forall e, epath_weight g (e :: nil) = weight g e.
-Proof.
-  intros. unfold epath_weight; simpl. 
-  rewrite Z_op_plus_O_r. reflexivity. 
-Qed.
-
 Lemma valid_epath_non_neg:
   forall u p v, 
     valid_epath g u p v ->  
     Z_op_le (Some 0) (epath_weight g p).
 Proof.  
   eapply valid_epath_ind_1n; eauto. 
-  - intros; rewrite epath_weight_nil; simpl; lia.
-  - intros. rewrite epath_weight_cons.
+  - intros; simpl; lia.
+  - intros; rewrite epath_weight_cons.
     pose proof weight_nonneg e. 
     destruct (weight g e); destruct (epath_weight g p); simpl in *; auto. 
     lia. 
@@ -113,7 +103,7 @@ Proof.
 Qed.
 
 
-Lemma nat_min_bounded: forall n (P: nat -> Prop),
+Fact nat_min_bounded: forall n (P: nat -> Prop),
   (exists m, (m <= n)%nat /\ P m /\ forall k, (k < m)%nat -> ~ P k) \/ 
   (forall m, (m <= n)%nat -> ~ P m).
 Proof.
@@ -126,14 +116,13 @@ Proof.
   - destruct IH as [[m [Hle [Hpm Hmin]]] | Hnone].
     + left. exists m. split; [lia|]. split; [exact Hpm|]. exact Hmin.
     + destruct (classic (P0 (S n))) as [Hsn | Hsn].
-      * left. exists (S n). split; [lia|]. split; [exact Hsn|].
-        intros k Hk. apply Hnone. lia.
-      * right. intros m Hm. destruct (classic (m = S n)) as [Heq | Hneq].
-        -- subst. exact Hsn.
-        -- apply Hnone. lia.
+      { left. exists (S n). split; [lia|]. split; 
+        [exact Hsn|intros; apply Hnone; lia]. }
+      { right. intros m Hm. destruct (classic (m = S n)) as [Heq | Hneq]; 
+        [subst; auto|apply Hnone; lia]. }
 Qed.
 
-Lemma nat_min_strong: forall n (P: nat -> Prop), 
+Fact nat_min_strong: forall n (P: nat -> Prop), 
   P n -> exists m, P m /\ forall x, P x -> (m <= x)%nat.
 Proof.
   intros n P0 Hn.
@@ -145,7 +134,7 @@ Proof.
   - exfalso. apply (Hnone n); auto. 
 Qed.
 
-Lemma Z_min_strong: 
+Fact Z_min_strong: 
   forall (z: Z) (P: Z -> Prop), 
   P z -> 
   (forall x, P x -> 0 <= x) -> 
@@ -165,6 +154,7 @@ Proof.
   lia.
 Qed.
 
+(* 在*没有负边*的图中，任意两点之间的最短距离一定存在 *)
 Theorem min_value_weight_epath_in_vset_exist: 
   forall u v S, exists z, min_value_weight_epath_in_vset g u v S z. 
 Proof. 
@@ -179,11 +169,10 @@ Proof.
     { exists p0. split; auto. }
     assert (Hpos: forall w, P_Z w -> 0 <= w).
     { intros w [p [Hp Hpw]].
-      destruct Hp as [Hp_valid _]. (* is_epath_through_vset 蕴含 valid_epath *)
+      destruct Hp as [Hp_valid _]. 
       pose proof (valid_epath_non_neg u p v Hp_valid).
       unfold f in Hpw. rewrite Hpw in H.
-      simpl in H. lia. 
-    }
+      simpl in H. lia. } 
     destruct (Z_min_strong w0 P_Z HP0 Hpos) as [m [Hm_prop Hm_min]].
     destruct Hm_prop as [p_min [Hp_min Hf_min]].
 
@@ -196,8 +185,7 @@ Proof.
       split; auto.
       intros b Hb.
       destruct (f b) as [wb |] eqn:Hfb.
-      * assert (Hb_PZ: P_Z wb).
-        { exists b. split; auto. }
+      * assert (Hb_PZ: P_Z wb) by (exists b; split; auto).
         pose proof (Hm_min wb Hb_PZ) as Hle.
         subst f.
         rewrite Hf_min, Hfb. 
@@ -206,11 +194,8 @@ Proof.
         rewrite Hf_min, Hfb.
         apply Z_op_le_none_r. 
     + apply Z_op_le_none_r.
-
-  - 
-    exists None.
-    unfold min_value_of_subset_with_default.
-    right. split; auto.
+  - exists None.
+    right; split; auto.
     intros a Ha.
     destruct (f a) as [wa |] eqn:Hfa.
     + exfalso. apply H_none.
@@ -220,7 +205,7 @@ Proof.
 Qed. 
 
 
-Theorem greedy_choice_correct: 
+Theorem dijkstra_greedy_choice_correct: 
   forall u S dist, 
     (forall v, ~ v ∈ S -> min_value_weight_epath_in_vset g src v S (dist v)) ->  
     min_object_of_subset Z_op_le (fun v => ~ v ∈ S) dist u -> 
@@ -301,7 +286,7 @@ Proof.
 Qed.
 
 
-Theorem visited_keep: 
+Theorem dijkstra_visited_keep: 
   forall u v S e dist, 
     min_value_weight_epath g src v (dist v) -> 
     min_value_weight_epath_in_vset g src u S (dist u) -> 
@@ -342,7 +327,10 @@ Proof.
     destruct (dist v); simpl; auto; lia. 
 Qed. 
 
-Theorem relax_edge_correct: 
+(* 这个定理是floyd-warshall的步骤定理的推论：
+当u-v之间的最短路径就是边e时，计算结果已然正确；
+当u-v之间的最短路径经过了集合S中的顶点x时，通过简单的数学演算和步骤定理得到的最小值可知，目标等价于证明dist(v) <= dist(u) + min_path(u,v)，这时，我们就会需要dist x不仅仅是全局的最小值，也是S上的最小值，这样才能把两边不同的最小值形式串连起来 *)
+Theorem dijkstra_relax_edge_correct: 
   forall u v e S dist, 
     (forall v, v ∈ S -> min_value_weight_epath g src v (dist v) /\  
                          min_value_weight_epath_in_vset g src v S (dist v)) -> 
@@ -484,7 +472,9 @@ Proof.
   Unshelve. auto. auto. 
 Qed. 
 
-Theorem relax_edge_correct': 
+(* 这个定理可以看作是上一个定理的推论：u和v之间的边e都是+∞ 
+不过为了算法那边的不同分支，我们还是没有合并这两个定理，而是用几乎相同的过程证明了两遍 *)
+Theorem dijkstra_relax_edge_correct': 
   forall u v S dist, 
     (forall v, v ∈ S -> min_value_weight_epath g src v (dist v) /\  
                          min_value_weight_epath_in_vset g src v S (dist v)) -> 

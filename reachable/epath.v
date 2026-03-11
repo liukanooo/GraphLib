@@ -774,6 +774,17 @@ Local Open Scope Z.
 Definition epath_weight (g: G) (p: list E): option Z :=
   fold_right Z_op_plus (Some 0) (map (weight g) p). 
 
+Theorem epath_weight_nil: 
+  epath_weight g nil = Some 0.
+Proof. unfold epath_weight; simpl; auto. Qed.
+
+Theorem epath_weight_single: 
+  forall e, epath_weight g (e :: nil) = weight g e.
+Proof.
+  intros. unfold epath_weight; simpl. 
+  rewrite Z_op_plus_O_r. reflexivity. 
+Qed.
+
 Theorem epath_weight_cons:
   forall g e p,
     epath_weight g (e :: p) = Z_op_plus (weight g e) (epath_weight g p).
@@ -925,10 +936,4 @@ Proof.
   destruct z1; destruct z2; simpl in *; try f_equal; try lia; auto.
 Qed.
 
-Theorem min_value_weight_epath_in_vset_exist: 
-  forall u v S, exists z, min_value_weight_epath_in_vset g u v S z.
-Proof.
-Admitted.
-
-(* 这几个min函数可以合并一下 *)
 End EPATH.
