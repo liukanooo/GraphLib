@@ -6,17 +6,6 @@ Require Export GraphLib.Syntax.
 Require Export GraphLib.reachable.reachable_basic.
 Require Export GraphLib.reachable.reachable_restricted.
 
-(* 路径抽象层 - 核心功能 *)
-Require Export GraphLib.reachable.path.
-Require Export GraphLib.reachable.path_basic.
-
-(* 路径实现层 *)
-Require Export GraphLib.reachable.vpath.
-Require Export GraphLib.reachable.epath.
-
-(* 权重支持 *)
-Require Export GraphLib.reachable.Zweight.
-Require Export GraphLib.reachable.eweight.
 
 (* 特殊图结构 *)
 Require Export GraphLib.directed.rootedtree.

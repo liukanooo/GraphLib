@@ -1,7 +1,6 @@
 Require Import GraphLib.graph_basic.
 Require Import GraphLib.reachable.reachable_basic.
 Require Import GraphLib.reachable.reachable_restricted.
-Require Import GraphLib.reachable.epath.
 Require Import SetsClass.
 (* g1 is the subgraph of g2 *)
 Definition subgraph 
