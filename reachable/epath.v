@@ -377,6 +377,26 @@ Proof.
     eapply valid_epath_cons; eauto.
 Qed.
 
+Theorem valid_epath_rev
+  {undirected:UndirectedGraph G V E}:
+  forall g u p v,
+    valid_epath g u p v ->
+    valid_epath g v (rev p) u.
+Proof.
+  intros g u p.
+  induction p using rev_ind; intros v Hvalid.
+  - simpl in *.
+    apply valid_epath_nil_inv in Hvalid.
+    subst v.
+    apply valid_epath_empty.
+  - rewrite rev_unit.
+    apply valid_epath_snoc_inv in Hvalid.
+    destruct Hvalid as [w [Hpre Hstep]].
+    specialize (IHp _ Hpre).
+    eapply valid_epath_cons; eauto.
+    eapply step_sym; eauto.
+Qed.
+
 (* epath上的简单路径：不经过重复边 *)
 Definition is_simple_epath (g: G) (u: V) (p: list E) (v: V): Prop :=
   valid_epath g u p v /\ NoDup p.
@@ -384,13 +404,16 @@ Definition is_simple_epath (g: G) (u: V) (p: list E) (v: V): Prop :=
 (* 移除epath中的环 *)
 (* 需要边的某种唯一性；有向图的边唯一性强于无向图的边唯一性，所有我们只证明后者 *)
 Lemma valid_epath_shorten_cycle
-  {step_aux_unique_undirected: forall g e x1 y1 x2 y2, step_aux g e x1 y1 -> step_aux g e x2 y2 -> 
+  (g: G)
+  {step_aux_unique_undirected: forall e x1 y1 x2 y2, step_aux g e x1 y1 -> step_aux g e x2 y2 -> 
   (x1 = x2 /\ y1 = y2) \/ (x1 = y2 /\ x2 = y1)}: 
-  forall g u v l1 e l2 l3,
+  forall u v l1 e l2 l3,
   valid_epath g u (l1 ++ e :: l2 ++ e :: l3) v ->
-  exists q, valid_epath g u q v /\ length q < length (l1 ++ e :: l2 ++ e :: l3).
+  exists q, valid_epath g u q v /\ 
+  length q < length (l1 ++ e :: l2 ++ e :: l3) /\ 
+  forall x, In x q -> In x (l1 ++ e :: l2 ++ e :: l3).
 Proof.
-  intros g u v l1 e l2 l3 H.
+  intros u v l1 e l2 l3 H.
   apply valid_epath_app_inv in H.
   destruct H as [u_mid [H_path_l1 H_rest1]].
   apply valid_epath_cons_inv in H_rest1.
@@ -399,19 +422,27 @@ Proof.
   destruct H_rest2 as [u_mid2 [H_path_l2 H_tail]].
   apply valid_epath_cons_inv in H_tail.
   destruct H_tail as [v_mid2 [H_step2 H_path_l3]].
-  pose proof (step_aux_unique_undirected g e u_mid v_mid u_mid2 v_mid2 H_step1 H_step2) 
+  pose proof (step_aux_unique_undirected e u_mid v_mid u_mid2 v_mid2 H_step1 H_step2) 
   as [[]|[]]; subst.
   - exists (l1 ++ e :: l3).
-    split.
+    split; [|split].
     + eapply valid_epath_app; eauto.
       eapply valid_epath_cons; eauto.
     + rewrite !length_app; simpl.
-      rewrite !length_app; simpl. lia.
+      rewrite !length_app; simpl. lia. 
+    + intros x Hx. 
+      rewrite in_app_iff in *; simpl in *; 
+      rewrite in_app_iff in *; simpl in *. 
+      tauto. 
   - exists (l1 ++ l3).
-    split.
+    split; [|split].
     + eapply valid_epath_app; eauto.
     + rewrite !length_app; simpl. 
       rewrite !length_app; simpl. lia.
+    + intros x Hx. 
+      rewrite in_app_iff in *; simpl in *; 
+      rewrite in_app_iff in *; simpl in *. 
+      tauto. 
 Qed.
 
 (* 任意两点之间的epath能够被转换为简单的epath *)
@@ -419,13 +450,14 @@ Qed.
 (* 这也提示出step_aux或许处于一个不正确的位置 *)
 (* 一个由起点和边能确定终点的前提是不够的。因为我们在epath上面不能获取起点相同的条件。 *)
 Theorem valid_epath_simple 
-{step_aux_unique_undirected: forall g e x1 y1 x2 y2, step_aux g e x1 y1 -> step_aux g e x2 y2 -> 
+  (g: G)
+  {step_aux_unique_undirected: forall e x1 y1 x2 y2, step_aux g e x1 y1 -> step_aux g e x2 y2 -> 
   (x1 = x2 /\ y1 = y2) \/ (x1 = y2 /\ x2 = y1)}:
-  forall g u p v,
+  forall u p v,
   valid_epath g u p v ->
   exists q, is_simple_epath g u q v.
 Proof.
-  intros g u p v H_valid.
+  intros u p v H_valid.
   remember (length p) as n.
   revert u p v H_valid Heqn.
   induction n using lt_wf_ind; intros u p v H_valid Heqn.
@@ -434,23 +466,42 @@ Proof.
   - apply Nodup_exists_repetition in H0.
     destruct H0 as [e [l1 [l2 [l3 H_eq]]]].
     subst p.
-    pose proof (@valid_epath_shorten_cycle step_aux_unique_undirected g u v l1 e l2 l3 H_valid) 
+    pose proof (@valid_epath_shorten_cycle g step_aux_unique_undirected u v l1 e l2 l3 H_valid) 
     as [q [H_valid_q H_len_q]].
     apply (H (length q)) in H_valid_q; auto.
     lia.
 Qed.
 
 (* gvalid需要再处理一下 *)
-Theorem valid_epath_simple_directed
-  `{StepUniqueDirected G V E}:
-  forall g u p v,
+Theorem valid_epath_simple_directed 
+  (g: G)
+  {undirected: StepUniqueUndirected G V E}
+  {g_valid: gvalid g}:
+  forall u p v,
   valid_epath g u p v ->
   exists q, is_simple_epath g u q v.
 Proof.
-  intros g u p v H_valid. 
-  eapply valid_epath_simple; eauto.
-  Unshelve. intros. 
-Admitted.
+  intros u p v H_valid. 
+  eapply valid_epath_simple; eauto. 
+  intros. 
+  eapply step_aux_unique_undirected in H. 
+  3:{ apply H0. }
+  destruct H as [[]|[]]; subst; auto. auto. 
+Qed.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 (* vset就等于path去掉首尾后的所有点的集合 *)
 Definition is_epath_through_exactly_vset 

@@ -134,4 +134,78 @@ Proof.
   exfalso; eapply step_in_eset_emptyset; eauto.
 Qed.
 
+Lemma step_in_eset_rt :
+  forall eset x y,
+    step_in_eset g eset x y ->
+    reachable_in_eset g eset x y.
+Proof.
+  intros eset x y H.
+  unfold reachable_in_eset.
+  transitivity_1n y; auto.
+  reflexivity.
+Qed.
+
+Lemma reachable_in_eset_weaken :
+  forall eset1 eset2 x y,
+    eset1 ⊆ eset2 ->
+    reachable_in_eset g eset1 x y ->
+    reachable_in_eset g eset2 x y.
+Proof.
+  intros eset1 eset2 x y Hsub Hreach.
+  unfold reachable_in_eset in *.
+  induction_1n Hreach.
+  - reflexivity.
+  - transitivity_1n x0; auto.
+    match goal with
+    | Hstep0 : step_in_eset g eset1 _ _ |- _ =>
+        destruct Hstep0 as [e [Hstep Heset]]
+    end.
+    exists e.
+    split.
+    + exact Hstep.
+    + apply Hsub; exact Heset.
+Qed.
+
+Lemma step_in_eset_sym 
+  {gv: GValid G}
+  {undirected: UndirectedGraph G V E}:
+  forall eset x y,
+    step_in_eset g eset x y ->
+    step_in_eset g eset y x.
+Proof.
+  intros eset x y [e [Hstep Heset]].
+  exists e.
+  split; auto.
+  eapply step_sym; eauto. 
+Qed.
+
+
+Lemma reachable_in_eset_sym
+  {gv: GValid G}
+  {undirected: UndirectedGraph G V E}:
+  forall eset x y,
+    reachable_in_eset g eset x y ->
+    reachable_in_eset g eset y x.
+Proof.
+  intros eset x y Hreach.
+  unfold reachable_in_eset in *.
+  induction_1n Hreach.
+  - reflexivity.
+  - transitivity_n1 x0; auto.
+    eapply step_in_eset_sym; eauto.
+Qed.
+
+Lemma reachable_in_eset_trans :
+  forall eset x y z,
+    reachable_in_eset g eset x y ->
+    reachable_in_eset g eset y z ->
+    reachable_in_eset g eset x z.
+Proof.
+  intros eset x y z Hxy Hyz.
+  unfold reachable_in_eset in *.
+  induction_1n Hxy.
+  - exact Hyz.
+  - transitivity_1n x0; auto.
+Qed.
+
 End reachableWITHIN.
