@@ -10,7 +10,7 @@ Require Export Coq.Classes.EquivDec.
 From GraphLib Require Import graph_basic reachable_basic reachable_restricted path path_basic vpath epath Zweight.
 From GraphLib.undirected Require Import tree.
 From MaxMinLib Require Import MaxMin Interface. 
-From ListLib Require Import General.NoDup.
+From ListLib Require Import General.NoDup General.Forall.
 
 
 Local Open Scope sets.
@@ -738,6 +738,51 @@ Proof.
     + eapply swap_acyclicity_from_new_edge_cycle_free_fixed.
       * exact Holdacyc.
       * exact Hcyclefree.
+Qed.
+
+(* 原本无环，加上e后有环，则该环一定包含边e *)
+Lemma cycle_must_use_new_edge :
+  forall l e x p,
+    acyclic_eset l ->
+    p <> nil ->
+    is_simple_epath g x p x ->
+    Forall (fun x => In x (e :: l)) p ->
+    In e p.
+Proof. 
+  intros.
+  destruct (classic (In e p)) as [Hin | Hnotin]; auto.
+  exfalso. 
+  apply H. 
+  exists x, p; split; [|split]; auto. 
+  eapply Forall_in_cons; eauto. 
+Qed.
+
+(* 环p在边集e::l上，并且包含边e，则存在一条l上的另一条路径连通e的两个顶点 *)
+Lemma cycle_gives_old_path_between_new_edge_endpoints :
+  forall l e x p,
+    is_simple_epath g x p x ->
+    Forall (fun x => In x (e :: l)) p ->
+    In e p ->
+    exists y1 y2 q,
+      step_aux g e y1 y2 /\
+      valid_epath g y2 q y1 /\
+      Forall (fun x => In x l) q.
+Proof.
+  intros s e x p [Hpath Hnodup] Hforall Hin.
+  apply in_split in Hin.
+  destruct Hin as [p1 [p2 Hp]].
+  subst p. 
+  apply valid_epath_app_inv in Hpath as [y1 [Hpre Hsuf]].
+  apply valid_epath_cons_inv in Hsuf as [y2 [Hstep Hpost]].
+  pose proof (Nodup_split_constructors p1 p2 e Hnodup) as [Hnotin1 Hnotin2].
+  rewrite Forall_app in Hforall.
+  destruct Hforall as [Hforall1 Hforall2].
+  inversion Hforall2; subst.
+  exists y1, y2, (p2 ++ p1).
+  split.
+  - exact Hstep.
+  - split; [eapply valid_epath_app|
+    rewrite Forall_app; split; eapply Forall_in_cons]; eauto.
 Qed.
 
 End prim.
