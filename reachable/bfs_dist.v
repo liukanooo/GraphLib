@@ -2,7 +2,9 @@ Require Import Coq.Logic.Classical_Prop.
 Require Import Coq.Arith.Wf_nat.
 Require Import Coq.Arith.Compare_dec.
 Require Import Coq.Arith.PeanoNat.
+Require Import Coq.Classes.RelationClasses.
 Require Import Coq.micromega.Lia.
+Require Import SetsClass.SetsClass.
 From GraphLib Require Import graph_basic reachable_basic.
 
 Section BFS_DIST.
@@ -12,6 +14,7 @@ Context {G V E: Type}
         (g: G).
 
 Notation step := (step g).
+Notation reachable := (reachable g).
 
 (** Unweighted graph distance.
 
@@ -122,6 +125,44 @@ Proof.
     apply Hnone.
     exists d.
     split; assumption.
+Qed.
+
+Lemma path_of_len_reachable :
+  forall u v d,
+    path_of_len u v d -> reachable u v.
+Proof.
+  intros u v d H.
+  induction H.
+  - reflexivity.
+  - eapply reachable_step_reachable; eauto.
+Qed.
+
+Lemma reachable_path_of_len :
+  forall v,
+    reachable src v -> exists d, path_of_len src v d.
+Proof.
+  intros v Hreach.
+  unfold reachable in Hreach.
+  induction_n1 Hreach.
+  - exists 0. constructor.
+  - destruct IHrt as [d Hpath].
+    exists (S d).
+    eapply pol_S; eauto.
+Qed.
+
+Lemma reachable_iff_bfs_dist :
+  forall v,
+    reachable src v <-> exists d, bfs_dist v d.
+Proof.
+  intro v.
+  split.
+  - intro Hreach.
+    apply reachable_path_of_len in Hreach.
+    destruct Hreach as [n Hpath].
+    destruct (path_of_len_min v n Hpath) as [d [Hdist _]].
+    exists d. exact Hdist.
+  - intros [d [Hpath _]].
+    eapply path_of_len_reachable; eauto.
 Qed.
 
 Lemma bfs_dist_unique :
