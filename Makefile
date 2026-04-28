@@ -17,6 +17,7 @@ DEP_FLAG = -Q $(CURRENT_DIR) GraphLib \
 BASE_FILES = graph_basic.v Syntax.v GraphLib.v
 REACHABLE_FILES = \
 reachable/reachable_basic.v reachable/reachable_restricted.v \
+reachable/bfs_dist.v \
 reachable/path_basic.v reachable/path.v \
 reachable/vpath.v reachable/epath.v \
 reachable/Zweight.v reachable/eweight.v
@@ -60,4 +61,3 @@ clean:
 .DEFAULT_GOAL := all
 
 include .depend
-

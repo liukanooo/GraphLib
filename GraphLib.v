@@ -5,6 +5,7 @@ Require Export GraphLib.Syntax.
 (* 可达性层 *)
 Require Export GraphLib.reachable.reachable_basic.
 Require Export GraphLib.reachable.reachable_restricted.
+Require Export GraphLib.reachable.bfs_dist.
 
 (* 路径抽象层 - 核心功能 *)
 Require Export GraphLib.reachable.path.
