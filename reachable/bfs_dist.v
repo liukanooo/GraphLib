@@ -1,4 +1,5 @@
 Require Import Coq.Logic.Classical_Prop.
+Require Import Coq.Lists.List.
 Require Import Coq.Arith.Wf_nat.
 Require Import Coq.Arith.Compare_dec.
 Require Import Coq.Arith.PeanoNat.
@@ -254,5 +255,80 @@ Proof.
   - subst k. right. exact Hk.
   - left. exists k. split; [exact Hk | lia].
 Qed.
+
+Section FINITE_BFS_DIST.
+
+Context
+  {gv: GValid G}
+  {stepvalid: @StepValid G V E graph gv}
+  {finite_graph: @FiniteGraph G V E graph gv}.
+
+Context
+  (g_valid: gvalid g)
+  (src_valid: vvalid g src).
+
+Lemma bfs_dist_vvalid :
+  forall v d,
+    bfs_dist v d ->
+    vvalid g v.
+Proof.
+  intros v d [Hpath _].
+  destruct (classic (v = src)) as [Heq | Hneq].
+  - subst v. exact src_valid.
+  - assert (Hsrc_neq_v: src <> v).
+    { intro H. apply Hneq. symmetry. exact H. }
+    pose proof (path_of_len_reachable src v d Hpath) as Hreach.
+    destruct (@reachable_vvalid G V E g graph gv stepvalid
+      src v Hsrc_neq_v Hreach) as [_ Hv].
+    exact Hv.
+Qed.
+
+Lemma finite_bfs_dist_bound_list :
+  forall l,
+    exists dmax,
+      forall v d,
+        In v l ->
+        bfs_dist v d ->
+        d <= dmax.
+Proof.
+  induction l as [|a l [dmax IH]].
+  - exists 0.
+    intros v d Hin _.
+    contradiction.
+  - destruct (classic (exists da, bfs_dist a da)) as [[da Hda] | Hnone].
+    + exists (Nat.max da dmax).
+      intros v d [Hv | Hin] Hdist.
+      * subst v.
+        pose proof (bfs_dist_unique a d da Hdist Hda).
+        lia.
+      * specialize (IH v d Hin Hdist).
+        lia.
+    + exists dmax.
+      intros v d [Hv | Hin] Hdist.
+      * subst v.
+        exfalso.
+        apply Hnone.
+        exists d.
+        exact Hdist.
+      * apply IH with (v := v); assumption.
+Qed.
+
+Lemma finite_bfs_dist_bound :
+  exists dmax,
+    forall v d,
+      bfs_dist v d ->
+      d <= dmax.
+Proof.
+  destruct (finite_bfs_dist_bound_list (listV g)) as [dmax Hbound].
+  exists dmax.
+  intros v d Hdist.
+  apply Hbound with (v := v).
+  - apply finite_vertices; [exact g_valid |].
+    apply bfs_dist_vvalid with (d := d).
+    exact Hdist.
+  - exact Hdist.
+Qed.
+
+End FINITE_BFS_DIST.
 
 End BFS_DIST.
