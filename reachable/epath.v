@@ -434,6 +434,25 @@ Proof.
     eapply step_sym; eauto.
 Qed.
 
+Theorem valid_epath_cross:
+  forall P g u v p,
+    P u -> ~ P v ->
+    valid_epath g u p v -> 
+    exists x y a, P x /\ ~ P y /\ step_aux g a x y /\ In a p.
+Proof.
+  intros Q g u v p Hu Hv Hvalid.
+  revert u Hu Hvalid.
+  induction p as [|a p IH]; intros x Hu Hvalid.
+  - apply valid_epath_nil_inv in Hvalid; subst; contradiction.
+  - apply valid_epath_cons_inv in Hvalid as [z [Hstep Hrest]].
+    destruct (classic (Q z)) as [Hz | Hz].
+    + destruct (IH z Hz Hrest) as [x' [y' [b [Hx' [Hy' [Hstep' Hin']]]]]].
+      exists x', y', b; repeat split; auto.
+      simpl; right; auto.
+    + exists x, z, a; repeat split; auto.
+      simpl; left; auto. 
+Qed.
+
 (* epath上的简单路径：不经过重复边 *)
 Definition is_simple_epath (g: G) (u: V) (p: list E) (v: V): Prop :=
   valid_epath g u p v /\ NoDup p.

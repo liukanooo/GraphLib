@@ -11,6 +11,15 @@ Definition subgraph
   (g1: G1) (g2: G2) : Prop :=
   (forall x y e, step_aux g1 e x y -> step_aux g2 e x y).
 
+Record subgraph2 
+  {G1 G2 V E: Type} 
+  {pg1: Graph G1 V E} 
+  {pg2: Graph G2 V E} 
+  (g1: G1) (g2: G2) : Prop := {
+  subgraph2_vertex: forall x, vvalid g1 x -> vvalid g2 x;
+  subgraph2_step_aux: forall x y e, step_aux g1 e x y -> step_aux g2 e x y;
+}.
+
 Record subgraph_vertex_eq
   {G1 G2 V E: Type} 
   {pg1: Graph G1 V E} 
@@ -19,32 +28,30 @@ Record subgraph_vertex_eq
   subgraph_vertex: forall x, vvalid g1 x <-> vvalid g2 x;
   subgraph_step_aux: forall x y e, step_aux g1 e x y -> step_aux g2 e x y;
   }.
-(*add an edge into directed graph g1*)
-Record addEdgeDirected {G V E: Type} {pg1: Graph G V E} {pg2: Graph G V E} 
-  (g1: G) (g2: G) (u v: V) (e: E): Prop := {
-  addEdge_directed_premise: vvalid g1 u /\ vvalid g1 v /\ ~ evalid g1 e;
-  addEdge_directed_vvalid: forall x, vvalid g2 x <-> vvalid g1 x;
-  addEdge_directed_evalid: forall a, evalid g2 a <-> evalid g1 a \/ a = e;
-  addEdge_directed_step_aux: forall x y a, step_aux g2 a x y <-> step_aux g1 a x y \/ (x = u /\ y = v /\ a = e);
+(** g2 is obtained from g1 by adding a fresh leaf vertex v and the
+    undirected edge e between u and v. *)
+Record addEdge {G1 G2 V E: Type} {pg1: Graph G1 V E} {pg2: Graph G2 V E} 
+  (g1: G1) (g2: G2) (u v: V) (e: E): Prop := { 
+  addEdge_new: vvalid g1 u /\ ~ vvalid g1 v /\ ~ evalid g1 e;
+  addEdge_vvalid: forall x, vvalid g2 x <-> vvalid g1 x \/ x = v;
+  addEdge_evalid: forall a, evalid g2 a <-> evalid g1 a \/ a = e;
+  addEdge_step_aux: forall x y a,
+    step_aux g2 a x y <->
+      step_aux g1 a x y \/
+      (a = e /\ ((x = u /\ y = v) \/ (x = v /\ y = u)));
 }.
 
-(*add an edge into undirected graph g1*)
-Record addEdgeUndirected {G V E: Type} {pg1: Graph G V E} {pg2: Graph G V E} 
-  (g1: G) (g2: G) (u v: V) (e: E): Prop := {
-  addEdge_undirected_premise: vvalid g1 u /\ vvalid g1 v /\ ~ evalid g1 e;
-  addEdge_undirected_vvalid: forall x, vvalid g2 x <-> vvalid g1 x;
-  addEdge_undirected_evalid: forall a, evalid g2 a <-> evalid g1 a \/ a = e;
-  addEdge_undirected_step_aux: forall x y a, step_aux g2 a x y <-> step_aux g1 a x y \/ (x = u /\ y = v /\ a = e) \/ (x = v /\ y = u /\ a = e);
+Record addEdge2 {G1 G2 V E: Type} {pg1: Graph G1 V E} {pg2: Graph G2 V E} 
+  (g1: G1) (g2: G2) (u v: V) (e: E): Prop := { 
+  addEdge2_new: vvalid g1 u /\ vvalid g1 v /\ ~ evalid g1 e;
+  addEdge2_vvalid: forall x, vvalid g2 x <-> vvalid g1 x \/ x = v;
+  addEdge2_evalid: forall a, evalid g2 a <-> evalid g1 a \/ a = e;
+  addEdge2_step_aux: forall x y a,
+    step_aux g2 a x y <->
+      step_aux g1 a x y \/
+      (a = e /\ ((x = u /\ y = v) \/ (x = v /\ y = u)));
 }.
-(*delete an edge from g1*)
-Record deleteEdge {G V E: Type} {pg1: Graph G V E} {pg2: Graph G V E} 
-  (g1: G) (g2: G) (u v: V) (e: E): Prop := 
-{
-  deleteEdge_premise: step_aux g1 e u v;
-  deleteEdge_vvalid: forall x, vvalid g2 x <-> vvalid g1 x;
-  deleteEdge_evalid: forall a, evalid g2 a <-> evalid g1 a /\ a <> e;
-  deleteEdge_step_aux: forall x y a, step_aux g2 a x y <-> step_aux g1 a x y /\ a <> e;
-}.
+
 
 Section SUBGRAGH.
 
@@ -156,6 +163,18 @@ Proof.
   intros.
   eapply sub_reverse in H0 as []; eauto;
   [eapply step_vvalid1 | eapply step_vvalid2]; eauto.
+Qed.
+
+Lemma sub_evalid 
+  {no_empty_edge: NoEmptyEdge G1 V E}: 
+  forall e,
+  evalid g1 e ->
+  evalid g2 e.
+Proof.
+  intros.
+  apply no_empty_edge in H as [x [y Hstep]]; auto.
+  apply sub in Hstep. 
+  eapply step_evalid; eauto.
 Qed.
     
 End SUBGRAGH.
