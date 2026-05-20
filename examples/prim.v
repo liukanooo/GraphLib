@@ -641,3 +641,337 @@ Qed.
 
 
 End prim.
+
+
+Section SPANNING_TREE.
+
+Context {G V E: Type} 
+        {pg: Graph G V E} 
+        {gv: GValid G}
+        {stepvalid: StepValid G V E}
+        {noemptyedge: NoEmptyEdge G V E}
+        {step_aux_unique_undirected: StepUniqueUndirected G V E}
+        {undirectedgraph: UndirectedGraph G V E}
+        {finitegraph: FiniteGraph G V E}
+        {simplegraph: SimpleGraph G V E}
+        {P: Type}
+        {path: Path G V E P}
+        {emptypath: EmptyPath G V E P path}
+        {singlepath: SinglePath G V E P path}
+        {concatpath: ConcatPath G V E P path}
+        {destruct1npath: Destruct1nPath G V E P path emptypath singlepath concatpath}
+        {tr: Tree G V E P}
+        (g: G)
+        {g_valid: gvalid g}
+        {g_connected: connected g}.
+
+Context {fg: FiniteGraph G V E}
+        {addEdge2Exist: addEdge2Exist G V E}.  
+
+Definition connected_subgraph_eq (h: G) : Prop := 
+  gvalid h /\ connected h /\ subgraph_vertex_eq h g. 
+
+Lemma connected_subgraph_eq_refl: 
+  connected_subgraph_eq g. 
+Proof. 
+  repeat split; auto. 
+Qed. 
+
+Lemma connected_subgraph_eq_edge_num_lt_bounded: 
+  forall h, connected_subgraph_eq h ->  
+  (edge_num h <= edge_num g)%Z. 
+Proof. 
+  intros h [Hvalid [Hconnected Hsub]]. 
+  unfold edge_num. 
+  pose proof (bijective_listE_NoDup g g_valid) as elist_nodup_g.
+  pose proof (bijective_edges g g_valid) as elist_iff_g.
+  pose proof (bijective_listE_NoDup h Hvalid) as elist_nodup_h.
+  pose proof (bijective_edges h Hvalid) as elist_iff_h.
+
+  assert (forall e, In e (bijective_listE h) -> In e (bijective_listE g)). {
+    intros e Heh. 
+    rewrite elist_iff_h in Heh. 
+    apply no_empty_edge in Heh as [x [y Hstep]]; auto. 
+    rewrite elist_iff_g. 
+    eapply step_evalid; eauto. 
+    apply Hsub; eauto. 
+  }
+  rewrite ! Zlength_correct.
+  apply NoDup_incl_length in H; auto. 
+  lia.
+Qed. 
+
+Lemma connected_subgraph_eq_edge_num_gt_bounded: 
+  forall h, connected_subgraph_eq h ->  
+  (edge_num h >= 0)%Z. 
+Proof. 
+  intros. 
+  unfold edge_num. 
+  rewrite ! Zlength_correct.
+  lia.
+Qed. 
+
+Lemma connected_subgraph_eq_exist: 
+  exists h, 
+    min_object_of_subset Z.le connected_subgraph_eq edge_num h.
+Proof.
+  set (Q := fun n => exists h, connected_subgraph_eq h /\ edge_num h = n).
+  assert (Hexists: exists n, (0 <= n <= edge_num g)%Z /\ Q n).
+  { exists (edge_num g)%Z. split.
+    + split; unfold edge_num; 
+      rewrite ! Zlength_correct; lia. 
+    + exists g; repeat split; auto. 
+  }
+  destruct (min_n_in_range Q (edge_num g)) as [m [Hm [Hlow Hhigh]]]; auto. 
+  { unfold edge_num; rewrite ! Zlength_correct; lia. }
+  destruct Hm as [h [Hconnected_subgraph_eq Hedge_num]].
+  exists h; split; auto. 
+  intros; rewrite Hedge_num; apply Hhigh; auto. 
+  split; [unfold edge_num; rewrite ! Zlength_correct; lia|
+  apply connected_subgraph_eq_edge_num_lt_bounded; auto]. 
+  exists b; split; auto. 
+Qed.
+
+Lemma spanningtree_exist: 
+  exists h, 
+    gvalid h /\ tree h /\ subgraph_vertex_eq h g.
+Proof.
+  destruct connected_subgraph_eq_exist as [h [[Hvalid [Hconnected Hsub]] Hmin]].
+  exists h; split; [|split]; auto. 
+  apply tree_decide; auto. 
+  intros [u [p [Hpne Hsimple]]]. 
+  destruct p; [auto|clear Hpne]. 
+  pose proof Hsimple as [Hpath Hnodup]. 
+  apply valid_epath_cons_inv in Hpath as [v [Hstep Hrest]]. 
+  pose proof Hvalid as Hh.
+  eapply addEdge2_valid_inv in Hvalid as [i [Hvalidi Hadd]]; 
+  [|eapply step_vvalid1; eauto|eapply step_vvalid2; eauto|eapply step_evalid; eauto]. 
+  assert (connected_subgraph_eq i). {
+    split; [|split]; auto. 
+    + intros x y Hx Hy. 
+      assert (Hhx:vvalid h x) by (eapply Hadd; auto). 
+      assert (Hhy:vvalid h y) by (eapply Hadd; auto). 
+      pose proof Hconnected x y Hhx Hhy. 
+      apply reachable_valid_epath in H as [q Hqpath]. 
+      apply valid_epath_simple in Hqpath as [q' [Hqpath Hqnodup]].
+      2:{ intros; eapply step_aux_unique_undirected with (g:=h); try apply Hh; eauto. } 
+      clear q; rename q' into q. 
+      destruct (classic (In e q)) as [Hin | Hnotin]; [|].
+      * apply in_split in Hin as [q1 [q2 Hp]]; subst.
+        apply valid_epath_app_inv in Hqpath as [a [Hqpre Hqrest]].
+        apply valid_epath_cons_inv in Hqrest as [b [Hqstep Hqpost]].
+        eapply step_aux_unique_undirected in Hstep as [[]|[]]; eauto; subst a b.
+        - eapply valid_epath_reachable. 
+          instantiate (1:= q1 ++ (rev p) ++ q2).
+          eapply addEdge2_valid_epath_new_to_old; eauto. 
+          { 
+            eapply valid_epath_app; eauto. 
+            eapply valid_epath_app; eauto. 
+            apply valid_epath_rev; auto. 
+          }
+          {
+            rewrite ! in_app_iff; intros ?. 
+            apply NoDup_remove_2 in Hqnodup; rewrite in_app_iff in Hqnodup.
+            inversion Hnodup; subst. 
+            rewrite <- in_rev in H. 
+            tauto. 
+          } 
+        - eapply valid_epath_reachable.
+          instantiate (1:= q1 ++ p ++ q2).
+          eapply addEdge2_valid_epath_new_to_old; eauto. 
+          { 
+            eapply valid_epath_app; eauto. 
+            eapply valid_epath_app; eauto. 
+          }
+          {
+            rewrite ! in_app_iff; intros ?. 
+            apply NoDup_remove_2 in Hqnodup; rewrite in_app_iff in Hqnodup.
+            inversion Hnodup; subst. 
+            tauto. 
+          } 
+      * eapply valid_epath_reachable.
+        eapply addEdge2_valid_epath_new_to_old; eauto. 
+    + split. 
+      * intros; split; intros. 
+        - apply Hsub. 
+          apply Hadd. 
+          left; auto. 
+        - apply Hsub in H.  
+          apply Hadd in H as []; auto; subst. 
+          apply Hadd. 
+      * intros. 
+        apply Hsub. 
+        apply Hadd; left; auto. 
+  }
+  apply addEdge2_elist_permutation in Hadd; auto. 
+  apply Permutation_length in Hadd. 
+  apply Hmin in H; unfold edge_num in H. 
+  rewrite ! Zlength_correct in H. 
+  simpl in Hadd. 
+  lia. 
+Qed. 
+
+Context {ew: EdgeWeight G E}.
+
+Theorem connected_have_mst: 
+  exists h, is_mst g h. 
+Proof. 
+  set (edge_weight_sum := fun l => fold_right Z_op_plus (Some 0%Z) (map (weight g) l)).
+  assert (edge_weight_sum_perm:
+    forall l1 l2, Permutation l1 l2 -> edge_weight_sum l1 = edge_weight_sum l2).
+  {
+    intros l1 l2 Hperm.
+    induction Hperm; unfold edge_weight_sum in *; simpl; auto.
+    - rewrite IHHperm; auto.
+    - destruct (weight g x), (weight g y), (fold_right Z_op_plus (Some 0) (map (weight g) l)); simpl; auto; f_equal; lia.
+    - congruence.
+  }
+  assert (all_sublists:
+    forall (l: list E), NoDup l -> exists ll : list (list E),
+      (forall x, In x ll -> NoDup x /\ incl x l) /\
+      (forall y, NoDup y -> incl y l -> exists x, In x ll /\ Permutation x y)).
+  {
+    induction l as [|a l IH]; intros Hnd.
+    - exists (nil :: nil). split.
+      + intros x H. simpl in H. destruct H as [H | []]; subst.
+        split; [constructor|intros ? []].
+      + intros y Hnodup Hincl.
+        destruct y as [|b y].
+        * exists nil. split; [simpl; auto|constructor].
+        * exfalso. apply (Hincl b); simpl; auto.
+    - inversion Hnd as [|? ? Hnotin Hnd_tail]; subst.
+      destruct (IH Hnd_tail) as [ll [Hsound Hcomplete]].
+      exists (ll ++ map (cons a) ll). split.
+      + intros x H.
+        apply in_app_iff in H as [H | H].
+        * apply Hsound in H as [Hnodup Hincl].
+          split; auto. intros z Hz; right; apply Hincl; auto.
+        * apply in_map_iff in H as [y [Hx Hy]]; subst x.
+          apply Hsound in Hy as [Hnodup Hincl].
+          split.
+          -- constructor.
+             ++ intro Ha. apply Hnotin. apply Hincl; auto.
+             ++ exact Hnodup.
+          -- intros b Hb. destruct Hb as [Hb | Hb]; subst.
+             ++ left; reflexivity.
+             ++ right; apply Hincl; auto.
+      + intros y Hnodup Hincl.
+        destruct (classic (In a y)) as [Ha | Ha].
+        * apply in_split in Ha as [y1 [y2 Hy]]; subst y.
+          assert (Hnodup' : NoDup (y1 ++ y2)).
+          {
+            apply NoDup_remove in Hnodup as [Hnodup' _].
+            exact Hnodup'.
+          }
+          assert (Hincl' : incl (y1 ++ y2) l).
+          {
+            intros b Hb.
+            assert (b <> a).
+            {
+              intro Heq; subst b.
+              apply NoDup_remove_2 in Hnodup.
+              contradiction.
+            }
+            assert (Hborig : In b (y1 ++ a :: y2)).
+            { rewrite !in_app_iff in *. simpl in *. tauto. }
+            apply Hincl in Hborig as [Hb' | Hb']; subst; [contradiction|auto].
+          }
+          destruct (Hcomplete (y1 ++ y2) Hnodup' Hincl') as [x [Hin_ll Hperm_tail]].
+          exists (a :: x). split.
+          -- apply in_app_iff. right. apply in_map_iff.
+             exists x. split; auto.
+          -- eapply Permutation_trans.
+             ++ constructor; exact Hperm_tail.
+             ++ rewrite Permutation_middle; reflexivity.
+        * assert (Hincl' : incl y l).
+          {
+            intros b Hb.
+            specialize (Hincl b Hb) as [Hb' | Hb']; subst; auto.
+            exfalso; apply Ha; exact Hb.
+          }
+          destruct (Hcomplete y Hnodup Hincl') as [x [Hin_ll Hperm]].
+          exists x. split; [apply in_app_iff; left; auto|auto].
+  }
+  destruct (all_sublists (bijective_listE g) (bijective_listE_NoDup g g_valid))
+    as [edge_sets [Hedge_sets_sound Hedge_sets_complete]].
+  set (legal := fun h => gvalid h /\ tree h /\ subgraph_vertex_eq h g).
+  set (represented := fun l =>
+    In l edge_sets /\ exists h, legal h /\ Permutation l (bijective_listE h)).
+  assert (legal_edges_in_g:
+    forall h, legal h -> incl (bijective_listE h) (bijective_listE g)).
+  {
+    intros h [Hvalid [_ Hsub]] e Hin.
+    apply bijective_edges in Hin; auto.
+    apply no_empty_edge in Hin as [u [v Hstep]]; auto.
+    apply bijective_edges; auto.
+    eapply step_evalid; eauto.
+    destruct Hsub as [_ Hsub_step].
+    apply Hsub_step; eauto.
+  }
+  assert (finite_min:
+    forall (A: Type) (f: A -> option Z) (P: A -> Prop) xs x,
+      In x xs -> P x -> (forall y, P y -> In y xs) ->
+      exists m, P m /\ forall y, P y -> Z_op_le (f m) (f y)).
+  {
+    intros A f P' xs.
+    revert P'.
+    induction xs as [|a xs IH]; intros P' x Hinx HPx Hsub.
+    - contradiction.
+    - destruct (classic (P' a)) as [HPa | HPa].
+      + destruct (classic (exists y, In y xs /\ P' y)) as [[y [Hiny HPy]] | Hnone].
+        * destruct (IH (fun z => P' z /\ In z xs) y Hiny (conj HPy Hiny))
+            as [m [[HPm Hminxs] Hmin]].
+          { intros z Hz; apply Hz. }
+          destruct (Z_op_le_total (f a) (f m)) as [Ham | Hma].
+          -- exists a. split; auto. intros z HPz.
+             destruct (classic (z = a)); subst; [apply Z_op_le_refl|].
+             apply Z_op_le_trans with (y := f m); auto.
+             apply Hmin; split; auto.
+             specialize (Hsub z HPz) as [Hz | Hz]; subst; auto; contradiction.
+          -- exists m. split; auto. intros z HPz.
+             destruct (classic (z = a)); subst; auto.
+             apply Hmin; split; auto.
+             specialize (Hsub z HPz) as [Hz | Hz]; subst; auto; contradiction.
+        * exists a. split; auto. intros z HPz.
+          destruct (Hsub z HPz) as [Hz | Hz]; subst; [apply Z_op_le_refl|].
+          exfalso; apply Hnone; exists z; split; auto. 
+      + assert (In x xs).
+        { destruct Hinx as [Hx | Hx]; subst; auto; contradiction. }
+        destruct (IH P' x H HPx) as [m [HPm Hmin]].
+        { intros z HPz. specialize (Hsub z HPz) as [Hz | Hz]; subst; auto; contradiction. }
+        exists m; auto.
+  }
+  destruct spanningtree_exist as [h0 Hh0].
+  assert (represented_exists : exists l, In l edge_sets /\ represented l).
+  {
+    destruct (Hedge_sets_complete (bijective_listE h0))
+      as [l0 [Hl0 Hperm0]].
+    - apply bijective_listE_NoDup; tauto.
+    - apply legal_edges_in_g; auto.
+    - exists l0. split; auto.
+      split; auto. exists h0; split; auto.
+  }
+  destruct represented_exists as [l0 [Hl0 Hrepr0]].
+  destruct (finite_min (list E) edge_weight_sum represented edge_sets l0 Hl0 Hrepr0
+    ltac:(intros y Hy; exact (proj1 Hy))) as [lm [Hreprm Hminm]].
+  destruct Hreprm as [_ [hm [Hlegalm Hpermm]]].
+  exists hm.
+  unfold is_mst, min_object_of_subset, total_weight.
+  split; auto.
+  intros h Hlegalh.
+  destruct (Hedge_sets_complete (bijective_listE h))
+    as [lh [Hlh Hpermh]].
+  - apply bijective_listE_NoDup; try tauto. 
+    apply Hlegalh.
+  - apply legal_edges_in_g; auto.
+  - assert (Hreprh : represented lh).
+    { split; auto. exists h; split; auto. }
+    specialize (Hminm lh Hreprh).
+  pose proof (edge_weight_sum_perm lm (bijective_listE hm) Hpermm).
+  unfold edge_weight_sum in H. 
+  rewrite <- H.
+  rewrite (edge_weight_sum_perm lh (bijective_listE h) Hpermh) in Hminm.
+  exact Hminm.
+Qed. 
+
+End SPANNING_TREE.

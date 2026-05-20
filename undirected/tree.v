@@ -577,6 +577,35 @@ Proof.
       apply Hmax; [lia | auto].
 Qed.
 
+Lemma min_n_in_range: forall (Q: Z -> Prop) (K: Z),
+  (0 <= K)%Z ->
+  (exists n, (0 <= n <= K)%Z /\ Q n) ->
+  exists m, Q m /\ (0 <= m <= K)%Z /\ (forall k, (0 <= k <= K)%Z -> Q k -> m <= k)%Z.
+Proof.
+  intros Q K HK Hexists.
+  remember (Z.to_nat K) as n.
+  revert Q K Heqn Hexists HK.
+  induction n; intros.
+  - assert (K = 0)%Z by lia. subst.
+    destruct Hexists as [x [[Hlow Hhigh] HP]].
+    assert (x = 0)%Z by lia. subst.
+    exists 0%Z. repeat split; auto; intros; try lia.
+  - destruct (classic (Q 0%Z)) as [Q0 | NotQ0].
+    + exists 0%Z. split; [|split]; auto; intros; lia.
+    + assert (Hexists': exists n, (0 <= n <= K - 1)%Z /\ (fun x => Q (x + 1)%Z) n).
+      { destruct Hexists as [x [[Hlx Hhx] Qx]].
+        assert (x > 0)%Z by (destruct (Z.eq_dec x 0); [subst; contradiction|lia]).
+        exists (x - 1)%Z. split; [lia|].
+        replace (x - 1 + 1)%Z with x by lia; auto. }
+      specialize (IHn (fun x => Q (x + 1)%Z) (K - 1)%Z).
+      destruct IHn as [m [Qm [[Hlm Hhm] Hmin]]]; [lia|auto|lia|].
+      exists (m + 1)%Z. split; [|split]; auto; [lia|].
+      intros k Hrange Qk.
+      assert (k > 0)%Z by (destruct (Z.eq_dec k 0); [subst; contradiction|lia]).
+      pose proof Hmin (k - 1)%Z ltac:(lia) ltac:(replace (k - 1 + 1)%Z with k by lia; auto) as Hle. 
+      lia.
+Qed.
+
 Theorem longest_simple_epath_exists :
   (exists v, vvalid g v) -> 
   exists p, max_object_of_subset Z.le (fun x => exists u v, is_simple_epath g u x v) (@Zlength E) p.
@@ -934,7 +963,7 @@ Proof.
     rewrite ! Zlength_correct.
     rewrite (Permutation_length Hperm).
     lia.
-Qed.
+Qed. 
 
 End TREEINDUCTION.
 
@@ -1117,7 +1146,6 @@ Proof.
   rewrite ! Zlength_cons; simpl. 
   rewrite Zlength_correct; lia.
 Qed.
-
 
 
 Context (r: G)
