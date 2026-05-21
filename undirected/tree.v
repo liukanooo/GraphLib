@@ -37,8 +37,9 @@ Context {G V E: Type}
         {gv: GValid G}
         {stepvalid: StepValid G V E}
         {undirectedgraph: UndirectedGraph G V E}
-        {step_aux_unique_undirected: StepUniqueUndirected G V E}
-        {P: Type}
+        {step_aux_unique_undirected: StepUniqueUndirected G V E}.
+
+Context {P: Type}
         {path: Path G V E P}
         {emptypath: EmptyPath G V E P path}
         {singlepath: SinglePath G V E P path}
@@ -46,7 +47,7 @@ Context {G V E: Type}
         {destruct1npath: Destruct1nPath G V E P path emptypath singlepath concatpath}
         {tr: Tree G V E P}. (*存在一个tree的谓词 *)
 (* 两个图之间的关系 *)
-Context {g1 g2: G}
+Context (g1 g2: G)
         {g_valid1: gvalid g1}
         {g_valid2: gvalid g2}
         {u v: V}
@@ -279,7 +280,7 @@ Proof.
   pose proof Hadd as Hadd'.
   destruct Hadd' as [[Hu [Hv He]] Hvx _ Hstep_add].
   apply Hvx in Hx as [Hx | Hx]; apply Hvx in Hy as [Hy | Hy]; subst.
-  * eapply (sub_reachable g1 g2); 
+  * eapply (sub_reachable g1 g2);
     [apply addEdge_subgraph|apply tree_connected; auto].
   * transitivity u.
     + eapply (sub_reachable g1 g2); 
@@ -369,15 +370,15 @@ Context {G V E: Type}
         {step_aux_unique_undirected: StepUniqueUndirected G V E}
         {undirectedgraph: UndirectedGraph G V E}
         {finitegraph: FiniteGraph G V E}
-        {simplegraph: SimpleGraph G V E} (*这里要求原图是simple graph是一个很明显的疑惑点*)
-        {P: Type}
+        {simplegraph: SimpleGraph G V E}. (*这里要求原图是simple graph是一个很明显的疑惑点*)
+Context {P: Type}
         {path: Path G V E P}
         {emptypath: EmptyPath G V E P path}
         {singlepath: SinglePath G V E P path}
         {concatpath: ConcatPath G V E P path}
         {destruct1npath: Destruct1nPath G V E P path emptypath singlepath concatpath}
-        {tr: Tree G V E P}
-        (g: G)
+        {tr: Tree G V E P}.
+Context (g: G)
         {g_valid: gvalid g}
         {g_tree: tree g}.
 
@@ -501,7 +502,7 @@ Proof.
   intros; eapply step_aux_unique_undirected; eauto.
 Qed.
 
-Section TREEINDUCTION.
+Section FINITE.
 
 Context {fg: FiniteGraph G V E}. 
 
@@ -549,62 +550,6 @@ Proof.
   apply NoDup_incl_length; auto. 
 Qed.
 
-Lemma max_n_in_range: forall (Q: Z -> Prop) (K: Z),
-  (0 <= K)%Z ->
-  (exists n, (0 <= n <= K)%Z /\ Q n) ->
-  exists m, Q m /\ (0 <= m <= K)%Z /\ (forall k, (0 <= k <= K)%Z -> Q k -> k <= m)%Z.
-Proof.
-  intros Q K HK Hexists.
-  remember (Z.to_nat K) as n.
-  revert K Heqn Hexists HK.
-  induction n; intros.
-  - assert (K = 0)%Z by lia. subst.
-    destruct Hexists as [x [[Hlow Hhigh] HP]].
-    assert (x = 0)%Z by lia. subst.
-    exists 0%Z. repeat split; auto; intros; lia.
-  - destruct (classic (Q K)) as [HPK | HNPK].
-    + exists K. repeat split; auto; intros; lia.
-    + assert (Hexists': exists n, (0 <= n <= K - 1)%Z /\ Q n).
-      { destruct Hexists as [x [[Hlx Hhx] HPx]].
-        exists x. split; auto. 
-        destruct (classic (x = K)); subst; [contradiction|lia]. }
-      specialize (IHn (K - 1)%Z). 
-      destruct IHn as [m [HPm [[Hlm Hhm] Hmax]]]; 
-      [lia|auto|lia|].
-      exists m. repeat split; auto; [lia |].
-      intros k Hrange HPk.
-      assert (k < K)%Z by (destruct (Z.eq_dec k K); [subst; contradiction | lia]).
-      apply Hmax; [lia | auto].
-Qed.
-
-Lemma min_n_in_range: forall (Q: Z -> Prop) (K: Z),
-  (0 <= K)%Z ->
-  (exists n, (0 <= n <= K)%Z /\ Q n) ->
-  exists m, Q m /\ (0 <= m <= K)%Z /\ (forall k, (0 <= k <= K)%Z -> Q k -> m <= k)%Z.
-Proof.
-  intros Q K HK Hexists.
-  remember (Z.to_nat K) as n.
-  revert Q K Heqn Hexists HK.
-  induction n; intros.
-  - assert (K = 0)%Z by lia. subst.
-    destruct Hexists as [x [[Hlow Hhigh] HP]].
-    assert (x = 0)%Z by lia. subst.
-    exists 0%Z. repeat split; auto; intros; try lia.
-  - destruct (classic (Q 0%Z)) as [Q0 | NotQ0].
-    + exists 0%Z. split; [|split]; auto; intros; lia.
-    + assert (Hexists': exists n, (0 <= n <= K - 1)%Z /\ (fun x => Q (x + 1)%Z) n).
-      { destruct Hexists as [x [[Hlx Hhx] Qx]].
-        assert (x > 0)%Z by (destruct (Z.eq_dec x 0); [subst; contradiction|lia]).
-        exists (x - 1)%Z. split; [lia|].
-        replace (x - 1 + 1)%Z with x by lia; auto. }
-      specialize (IHn (fun x => Q (x + 1)%Z) (K - 1)%Z).
-      destruct IHn as [m [Qm [[Hlm Hhm] Hmin]]]; [lia|auto|lia|].
-      exists (m + 1)%Z. split; [|split]; auto; [lia|].
-      intros k Hrange Qk.
-      assert (k > 0)%Z by (destruct (Z.eq_dec k 0); [subst; contradiction|lia]).
-      pose proof Hmin (k - 1)%Z ltac:(lia) ltac:(replace (k - 1 + 1)%Z with k by lia; auto) as Hle. 
-      lia.
-Qed.
 
 Theorem longest_simple_epath_exists :
   (exists v, vvalid g v) -> 
@@ -965,18 +910,12 @@ Proof.
     lia.
 Qed. 
 
-End TREEINDUCTION.
+End FINITE.
 
 
 End TREE.
 
-Class addEdgeExist (G V E: Type) {pg: Graph G V E} {gv: GValid G} := {
-  addEdge_valid: forall g u v e, 
-    gvalid g ->
-    step_aux g e u v -> 
-    (forall w, (exists a, step_aux g a w v) -> u = w) ->
-    exists h, gvalid h /\ addEdge h g u v e;
-}.
+
 
 Section TREE_OPERATION.
 
@@ -989,15 +928,15 @@ Context {G V E: Type}
         {undirectedgraph: UndirectedGraph G V E}
         {finitegraph: FiniteGraph G V E}
         {simplegraph: SimpleGraph G V E}
-        {addEdgeExist: addEdgeExist G V E}(*要求原图的加边存在性*)
-        {P: Type}
+        {addEdgeExist: addEdgeExist G V E}. (*要求原图的加边存在性*)
+Context {P: Type}
         {path: Path G V E P}
         {emptypath: EmptyPath G V E P path}
         {singlepath: SinglePath G V E P path}
         {concatpath: ConcatPath G V E P path}
         {destruct1npath: Destruct1nPath G V E P path emptypath singlepath concatpath}
-        {tr: Tree G V E P}
-        (g: G)
+        {tr: Tree G V E P}.
+Context (g: G)
         {g_valid: gvalid g}
         {g_tree: tree g}.
 
@@ -1089,7 +1028,7 @@ Proof.
 
       assert (Hv: ~ vvalid h v) by (destruct Hadd; tauto). 
       assert (He: ~ evalid h e) by (destruct Hadd; tauto). 
-      assert (tree h) by (eapply deleteLeaf_tree; eauto). 
+      assert (tree h) by (eapply deleteLeaf_tree with (g2:=g); eauto). 
       assert (HpermV : Permutation (bijective_listV g) (v :: bijective_listV h)).
       {
         eapply addEdge_vlist_permutation; eauto.
@@ -1111,7 +1050,6 @@ Proof.
       pose proof IHn h Hvalid H0. 
       rewrite ! Zlength_correct in *.
       lia.  
-      Unshelve. auto. 
   }
   destruct (bijective_listE g) eqn: Hel. 
   {

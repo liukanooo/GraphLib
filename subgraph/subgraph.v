@@ -52,6 +52,25 @@ Record addEdge2 {G1 G2 V E: Type} {pg1: Graph G1 V E} {pg2: Graph G2 V E}
       (a = e /\ ((x = u /\ y = v) \/ (x = v /\ y = u)));
 }.
 
+Class addEdgeExist (G V E: Type) {pg: Graph G V E} {gv: GValid G} := {
+  addEdge_valid: forall g u v e, 
+    gvalid g ->
+    step_aux g e u v -> 
+    (forall w, (exists a, step_aux g a w v) -> u = w) ->
+    exists h, gvalid h /\ addEdge h g u v e;
+}.
+
+
+Class addEdge2Exist (G V E: Type) {pg: Graph G V E} {gv: GValid G} := {
+  addEdge2_valid: forall g u v e, 
+    gvalid g -> 
+    vvalid g u -> vvalid g v -> ~ evalid g e ->
+    exists h, gvalid h /\ addEdge2 g h u v e;
+  addEdge2_valid_inv: forall g u v e, 
+    gvalid g -> 
+    vvalid g u -> vvalid g v -> evalid g e ->
+    exists h, gvalid h /\ addEdge2 h g u v e;
+}.
 
 Section SUBGRAGH.
 
@@ -64,8 +83,8 @@ Context {G1 G2 V E: Type}
         {stepvalid2: StepValid G2 V E}
         (g1: G1)
         (g2: G2)
-        {g_valid1: @gvalid G1 gvalid1 g1}
-        {g_valid2: @gvalid G2 gvalid2 g2}
+        {g_valid1: gvalid g1}
+        {g_valid2: gvalid g2}
         (sub: subgraph g1 g2).
 
 Lemma sub_step': forall x y,
