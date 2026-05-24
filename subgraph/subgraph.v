@@ -52,6 +52,15 @@ Record addEdge2 {G1 G2 V E: Type} {pg1: Graph G1 V E} {pg2: Graph G2 V E}
       (a = e /\ ((x = u /\ y = v) \/ (x = v /\ y = u)));
 }.
 
+Record addEdge0 {G1 G2 V E: Type} {pg1: Graph G1 V E} {pg2: Graph G2 V E} 
+  (g1: G1) (g2: G2) (u v: V) (e: E): Prop := { 
+  addEdge0_vvalid: forall x, vvalid g2 x <-> vvalid g1 x \/ x = u \/ x = v;
+  addEdge0_evalid: forall a, evalid g2 a <-> evalid g1 a \/ a = e;
+  addEdge0_step_aux: forall x y a,
+    step_aux g2 a x y <->
+      step_aux g1 a x y \/ (a = e /\ ((x = u /\ y = v) \/ (x = v /\ y = u)));
+}.
+
 Class addEdgeExist (G V E: Type) {pg: Graph G V E} {gv: GValid G} := {
   addEdge_valid: forall g u v e, 
     gvalid g ->

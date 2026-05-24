@@ -451,7 +451,6 @@ Proof.
     (* 将这条边e增加到最小生成树y1中去，y1 + e = h *)
     assert (exists h, gvalid h /\ addEdge2 y1 h u v e) as [h [Hvalid Hadd2]].
     {
-      destruct Hmin as [[x0 [y0 [_ [_ Hstep]]]] _].
       apply addEdge2_valid; auto; [apply Hmst| |]. 
       * destruct Hmst as [[_ [_ Hsubeq]]]. 
         eapply subgraph_vertex; eauto. 
