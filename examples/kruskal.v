@@ -25,7 +25,7 @@ Context {G V E: Type}
         {undirectedgraph: UndirectedGraph G V E}
         {finitegraph: FiniteGraph G V E}
         {simplegraph: SimpleGraph G V E}
-        {addEdge2Exist: addEdge2Exist G V E}.
+        {addEdgeExist: addEdgeExist G V E}.
 
 Context {P: Type}
         {path: Path G V E P}
@@ -42,7 +42,7 @@ Context (r: G)
 
 Lemma addEdge0_epath_new_to_old: 
   forall g h u v x y e p, 
-    addEdge0 g h u v e -> 
+    addEdge g h u v e -> 
     valid_epath h x p y -> 
     (~ In e p) ->
     valid_epath g x p y. 
@@ -65,7 +65,7 @@ Theorem kruskal_step:
   forall g1 g2 u v e, 
     gvalid g1 /\ (forall u, ~ exists p, is_simple_epath g1 u p u /\ p <> nil) /\ (exists y1, is_mst r y1 /\ subgraph2 g1 y1) -> 
     step_aux r e u v -> 
-    addEdge0 g1 g2 u v e -> 
+    addEdge g1 g2 u v e -> 
     min_object_of_subset Z_op_le (fun e => forall u v, step_aux r e u v -> ~ reachable g1 u v) (weight r) e ->
     (forall u, ~ exists p, is_simple_epath g2 u p u /\ p <> nil) /\ (exists y2, is_mst r y2 /\ subgraph2 g2 y2).
 Proof.
@@ -144,28 +144,29 @@ Proof.
     } 
   - (* 当新增加的边e不在原来的被包含在的最小生成树中时 *)
     (* 将这条边e增加到最小生成树y1中去，y1 + e = h *)
-    assert (exists h, gvalid h /\ addEdge2 y1 h u v e) as [h [Hvalid Hadd2]].
+    assert (Huy1: vvalid y1 u) by (apply Hmst1; eapply step_vvalid1; eauto).
+    assert (Hvy1: vvalid y1 v) by (apply Hmst1; eapply step_vvalid2; eauto). 
+    assert (exists h, gvalid h /\ addEdge y1 h u v e) as [h [Hvalid Hadd2]].
     {
-      apply addEdge2_valid; auto; [apply Hmst1| |]. 
-      * destruct Hmst1 as [[_ [_ Hsubeq]]]. 
-        eapply subgraph_vertex; eauto. 
-        eapply step_vvalid1; eauto.
-      * destruct Hmst1 as [[_ [_ Hsubeq]]]. 
-        eapply subgraph_vertex; eauto.
-        eapply step_vvalid2; eauto.
+      apply addEdge_valid; auto. 
+      apply Hmst1.
     } 
     (* 则 h 中有一个简单回路 p ，包含边e *)
     assert (exists p, is_simple_epath h u p u /\ In e p /\ p <> nil) as [p [Hp [Heinp Hpne]]]. 
     {
-      eapply tree_addEdge_have_circuit; try apply Hadd2; apply Hmst1.
+      eapply tree_addEdge_have_circuit.
+      6: apply Hadd2. 
+      all: try apply Hmst1; try auto.
+      eapply step_vvalid1; eauto. 
+      eapply step_vvalid2; eauto. 
     }
     (* p 中包含一条跨越 g1 当前连通分量的旧树边 a *)
     assert (exists x y a, reachable g1 u x /\ ~ reachable g1 u y /\ step_aux h a x y /\ In a p /\ a <> e) as [x [y [a [Hx [Hy [Hstep_ah [Hinap Hane]]]]]]].
     {
       pose proof Hmin as [Hmin_in _].
-      assert (Hnot_reach_uv : ~ reachable g1 u v) by (eapply Hmin_in; eauto).
-      destruct (addEdge2_cycle_without_new_edge_simple y1 h u v e u p Hvalid Hadd2 Hp Heinp)
-        as [q [[Hqpath Hqnodup] Hqmem]].
+      assert (Hnot_reach_uv : ~ reachable g1 u v) by (eapply Hmin_in; eauto). 
+      eapply addEdge2_cycle_without_new_edge_simple in Hp
+      as [q [[Hqpath Hqnodup] Hqmem]]; eauto.
       eapply valid_epath_cross with (P := fun z => reachable g1 u z) in Hqpath
         as [x [y [a [Hx [Hy [Hstep_y1 Hinaq]]]]]]; eauto.
       apply Hqmem in Hinaq as [Hinap Hane].
@@ -174,8 +175,9 @@ Proof.
       reflexivity.
     }   
     (* 将 a 从 h 中删除 *)
-    assert (exists i, gvalid i /\ addEdge2 i h x y a) as [i [Hvalidi Hi]]. {
-      apply addEdge2_valid_inv; auto. 
+    assert (exists i, gvalid i /\ addEdge i h x y a /\ (vvalid i x /\ vvalid i y /\ ~ evalid i a)) 
+    as [i [Hvalidi [Hi [Hvx [Hvy Hnotina]]]]]. {
+      apply addEdge_valid_inv; auto. 
       * eapply step_vvalid1; eauto.
       * eapply step_vvalid2; eauto.
       * eapply step_evalid; eauto.
@@ -187,10 +189,7 @@ Proof.
     + apply Hvalidi. 
 
     (* i 是 树 *)
-    + eapply addEdge2_delete_circuit_tree. 
-      5: apply Hi.
-      4: apply Hadd2.
-      4: apply Hp. 
+    + eapply (addEdge2_delete_circuit_tree y1 h i u v e x y a p); eauto. 
       all: try tauto. 
       all: apply Hmst1.
 
@@ -201,11 +200,11 @@ Proof.
       split.
       * intros z.
         rewrite <- Hy1_vertex.
-        rewrite <- (addEdge2_vvalid_iff i h x y a z Hi).
+        rewrite <- (addEdge2_vvalid_iff i h x y a); eauto.
         apply addEdge2_vvalid_iff with (u := u) (v := v) (e := e); auto.
       * intros z w b Hstep_i.
-        pose proof (addEdge2_old_step _ _ _ _ _ _ _ _ Hi Hstep_i) as Hstep_h.
-        destruct Hadd2 as [_ _ _ Hstep_h_iff].
+        eapply addEdge2_old_step in Hstep_i as Hstep_h; try apply Hi; eauto.
+        destruct Hadd2 as [_ _ Hstep_h_iff].
         apply Hstep_h_iff in Hstep_h as [Hstep_y1 | [Hb [[] | []]]]; subst; auto.
         apply step_sym; auto. 
 
@@ -299,27 +298,19 @@ Proof.
 	        destruct Hadd as [Hvvalid_g2 _ _].
 	        apply Hvvalid_g2 in Hz as [|[|]]; subst.
 	        + apply Hsubgraph1 in H. 
-	          apply (addEdge2_vvalid_iff i h x y a z Hi).
-	          apply (addEdge2_vvalid_iff y1 h u v e z Hadd2); auto.
-	        + assert (Huy1 : vvalid y1 u).
-	          { destruct Hmst1 as [[_ [_ Hsubeq_y1]] _].
-	            eapply subgraph_vertex; eauto.
-	            eapply step_vvalid1; eauto. }
-	          apply (addEdge2_vvalid_iff i h x y a u Hi).
-	          apply (addEdge2_vvalid_iff y1 h u v e u Hadd2); auto.
-	        + assert (Hvy1 : vvalid y1 v).
-	          { destruct Hmst1 as [[_ [_ Hsubeq_y1]] _].
-	            eapply subgraph_vertex; eauto.
-	            eapply step_vvalid2; eauto. }
-	          apply (addEdge2_vvalid_iff i h x y a v Hi).
-	          apply (addEdge2_vvalid_iff y1 h u v e v Hadd2); auto.
+	          apply (addEdge2_vvalid_iff i h x y a); eauto.
+	          apply (addEdge2_vvalid_iff y1 h u v e); auto.
+	        + apply (addEdge2_vvalid_iff i h x y a); auto.
+	          apply (addEdge2_vvalid_iff y1 h u v e); auto.
+	        + apply (addEdge2_vvalid_iff i h x y a); eauto.
+	          apply (addEdge2_vvalid_iff y1 h u v e); auto.
 	      }
 	      {
 	        intros z w b Hstep_g2.
 	        destruct Hadd as [_ _ Hstep_g2_iff].
 	        apply Hstep_g2_iff in Hstep_g2 as [Hstep_g1 | [Hb [[Hz Hw] | [Hz Hw]]]].
 	        * assert (Hstep_y1_b : step_aux y1 b z w) by (apply Hsubgraph1; auto).
-	          assert (Hstep_h_b : step_aux h b z w) by (eapply addEdge2_old_step with (i:=y1); eauto).
+	          assert (Hstep_h_b : step_aux h b z w) by (eapply addEdge2_old_step with (g1:=y1); eauto).
 	          destruct (classic (b = a)) as [Hba | Hba].
 	          + subst b. exfalso.
 	            eapply step_aux_unique_undirected in Hstep_ah as [[]|[]]; eauto; subst; 

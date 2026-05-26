@@ -30,7 +30,7 @@ Class Tree
 }.
 
 (* 关于AddEdge前后都是树的证明和顶点边列表关系 *)
-Section ADD_EDGE_TREE.
+Section ADDLEAFISTREE.
 
 Context {G V E: Type}
         {pg: Graph G V E}
@@ -46,231 +46,18 @@ Context {P: Type}
         {concatpath: ConcatPath G V E P path}
         {destruct1npath: Destruct1nPath G V E P path emptypath singlepath concatpath}
         {tr: Tree G V E P}. (*存在一个tree的谓词 *)
-(* 两个图之间的关系 *)
+
 Context (g1 g2: G)
         {g_valid1: gvalid g1}
-        {g_valid2: gvalid g2}
-        {u v: V}
+        {g_valid2: gvalid g2}.
+
+(* 在该前提下进行的加边操作的基本性质 *)
+Context {u v: V}
         {e: E}
+        {Hu: vvalid g1 u}
+        {Hv: ~ vvalid g1 v}
+        {He: ~ evalid g1 e}
         (Hadd: addEdge g1 g2 u v e). 
-
-Lemma addEdge_subgraph: 
-  subgraph g1 g2.
-Proof.
-  unfold subgraph.
-  intros. 
-  apply Hadd; left; auto.
-Qed.
-
-Lemma addEdge_new_step_aux:
-  forall x y a,
-    step_aux g2 a x y ->
-    a <> e ->
-    step_aux g1 a x y.
-Proof.
-  intros x y a Hstep Hneq.
-  destruct Hadd as [_ _ _ Hstep_add].
-  apply Hstep_add in Hstep as [Hold | [Heq _]]; auto.
-  contradiction.
-Qed.
-
-Lemma addEdge_new_step_uv:
-  step_aux g2 e u v.
-Proof.
-  destruct Hadd as [_ _ _ Hstep_add].
-  apply Hstep_add.
-  right; split; [reflexivity | left; split; reflexivity].
-Qed.
-
-Lemma addEdge_new_step_vu:
-  step_aux g2 e v u.
-Proof.
-  apply step_sym.
-  apply addEdge_new_step_uv.
-Qed.
-
-Lemma addEdge_new_vertex_is_leaf:
-  exists ! x, exists a, step_aux g2 a x v.
-Proof.
-  exists u.
-  split.
-  - exists e; apply addEdge_new_step_uv.
-  - intros x [a Hstep].
-    destruct Hadd as [[Hu [Hv He]] _ _ Hstep_add].
-    apply Hstep_add in Hstep as [Hold | [Heq [[Hx Hy] | [Hx Hy]]]].
-    + exfalso.
-      apply Hv.
-      eapply step_vvalid2; eauto.
-    + subst; reflexivity.
-    + subst; auto.
-Qed.
-
-Lemma addEdge_vlist_permutation:
-  forall (vlist1 vlist2: list V),
-    NoDup vlist1 ->
-    (forall x, In x vlist1 <-> vvalid g1 x) ->
-    NoDup vlist2 ->
-    (forall x, In x vlist2 <-> vvalid g2 x) ->
-    Permutation vlist2 (v :: vlist1).
-Proof.
-  intros vlist1 vlist2 Hnodup1 Hviff1 Hnodup2 Hviff2. 
-  destruct Hadd as [[Hu [Hv He]] _ _ Hstep_add].
-  apply NoDup_Permutation; auto.
-  - constructor; auto.
-    intro Hin.
-    apply Hv.
-    apply Hviff1; auto.
-  - intros x; split; intros Hin.
-    + apply Hviff2 in Hin.
-      destruct Hadd as [_ Hadd_vvalid _].
-      apply Hadd_vvalid in Hin as [Hin | Hin]; simpl; auto. 
-      right; apply Hviff1; auto.
-    + apply Hviff2.
-      destruct Hadd as [_ Hadd_vvalid _].
-      apply Hadd_vvalid.
-      destruct Hin; [right|left]; auto. 
-      apply Hviff1; auto.
-Qed.
-
-Lemma addEdge_elist_permutation:
-  forall (elist1 elist2: list E),
-    NoDup elist1 ->
-    (forall a, In a elist1 <-> evalid g1 a) ->
-    NoDup elist2 ->
-    (forall a, In a elist2 <-> evalid g2 a) ->
-    Permutation elist2 (e :: elist1).
-Proof.
-  intros elist1 elist2 Hnodup1 Heiff1 Hnodup2 Heiff2.
-  destruct Hadd as [[Hv He] _ _ Hstep_add].
-  apply NoDup_Permutation; auto.
-  - constructor; auto.
-    intro Hin.
-    apply He.
-    apply Heiff1; auto.
-  - intros a; split; intros Hin.
-    + apply Heiff2 in Hin.
-      destruct Hadd as [_ _ Hadd_evalid].
-      apply Hadd_evalid in Hin as [Hin | Hin]; simpl; auto. 
-      right; apply Heiff1; auto.
-    + apply Heiff2.
-      destruct Hadd as [_ _ Hadd_evalid].
-      apply Hadd_evalid.
-      destruct Hin; [right|left]; auto. 
-      apply Heiff1; auto.
-Qed.
-
-
-Lemma addEdge_valid_epath_old_to_new:
-  forall x p y, valid_epath g1 x p y -> valid_epath g2 x p y.
-Proof.
-  intros x p.
-  revert x.
-  induction p as [|a p IHp]; intros x y Hpath.
-  - apply valid_epath_nil_inv in Hpath; subst.
-    apply valid_epath_empty.
-  - apply valid_epath_cons_inv in Hpath as [z [Hstep Hrest]].
-    eapply valid_epath_cons.
-    + apply addEdge_subgraph; exact Hstep.
-    + apply IHp; exact Hrest.
-Qed.
-
-Lemma addEdge_valid_epath_new_to_old:
-  forall x p y,
-    valid_epath g2 x p y ->
-    ~ In e p ->
-    valid_epath g1 x p y.
-Proof.
-  intros x p.
-  revert x.
-  induction p as [|a p IHp]; intros x y Hpath Hfor.
-  - apply valid_epath_nil_inv in Hpath; subst.
-    apply valid_epath_empty.
-  - simpl in Hfor.
-    apply valid_epath_cons_inv in Hpath as [z [Hstep Hrest]].
-    eapply valid_epath_cons.
-    + eapply addEdge_new_step_aux; eauto.
-    + apply IHp; auto.
-Qed.
-
-Lemma addEdge_no_epath_from_new_without_edge:
-  forall p x,
-    valid_epath g2 v p x ->
-    ~ In e p ->
-    x = v.
-Proof.
-
-  intros p.
-  induction p as [|a p IHp]; intros x Hpath Hfor.
-  - apply valid_epath_nil_inv in Hpath; auto.
-  - simpl in Hfor.
-    apply valid_epath_cons_inv in Hpath as [z [Hstep Hrest]].
-    destruct Hadd as [[Hu [Hv He]] _ _ Hstep_add].
-    apply Hstep_add in Hstep as [Hold | [Heq _]].
-    + exfalso.
-      apply Hv.
-      eapply step_vvalid1; eauto.
-    + destruct Hfor; subst; left; auto.
-Qed.
-
-Lemma addEdge_no_epath_to_new_without_edge:
-  forall x p,
-    valid_epath g2 x p v ->
-    ~ In e p ->
-    x = v.
-Proof.
-  intros x p Hpath Hfor. 
-  rewrite in_rev in Hfor.
-  pose proof (valid_epath_rev g2 x p v Hpath) as Hrev.
-  eapply addEdge_no_epath_from_new_without_edge; eauto.
-Qed. 
-
-Lemma addEdge_simple_epath_old_endpoints_not_in_new_edge:
-  forall x p y,
-    x <> v ->
-    y <> v ->
-    is_simple_epath g2 x p y ->
-    ~ In e p.
-Proof.
-  intros x p y Hxv Hyv [Hpath Hnodup] Hin.
-  apply in_split in Hin as [l1 [l2 Hp]].
-  subst p.
-  apply valid_epath_app_inv in Hpath as [a [Hl1 Hrest]].
-  apply valid_epath_cons_inv in Hrest as [b [Hstep Hl2]]. 
-  apply NoDup_remove_2 in Hnodup. 
-  rewrite in_app_iff in Hnodup.
-  pose proof Hadd as Hadd'.
-  destruct Hadd' as [[Hu [Hv He]] _ _ Hstep_add].
-  apply Hstep_add in Hstep as [Hold | [Heq [[Ha Hb] | [Ha Hb]]]]; subst.
-  * apply He.
-    eapply step_evalid; eauto.
-  * assert (y = v) by (eapply addEdge_no_epath_from_new_without_edge; eauto).
-    contradiction.
-  * assert (x = v) by (eapply addEdge_no_epath_to_new_without_edge; eauto).
-    contradiction.
-Qed.
-
-Lemma addEdge_simple_cycle_not_in_new_edge:
-  forall x p,
-    is_simple_epath g2 x p x ->
-    ~ In e p.
-Proof.
-  intros x p [Hpath Hnodup] Hin.
-  apply in_split in Hin as [l1 [l2 Hp]]; subst.
-  apply valid_epath_app_inv in Hpath as [a [Hl1 Hrest]].
-  apply valid_epath_cons_inv in Hrest as [b [Hstep Hl2]].
-  apply NoDup_remove_2 in Hnodup. 
-  rewrite in_app_iff in Hnodup.
-  pose proof Hadd as Hadd'.
-  destruct Hadd' as [[Hu [Hv He]] _ _ Hstep_add].
-  apply Hstep_add in Hstep as [Hold | [Heq [[Ha Hb] | [Ha Hb]]]]; subst.
-  * apply He; eapply step_evalid; eauto.
-  * assert (x = v) by (eapply addEdge_no_epath_from_new_without_edge; eauto); subst.
-    assert (u = v) by (eapply addEdge_no_epath_from_new_without_edge; eauto); subst. 
-    auto.
-  * assert (x = v) by (eapply addEdge_no_epath_to_new_without_edge; eauto); subst.
-    assert (u = v) by (eapply addEdge_no_epath_to_new_without_edge; eauto); subst.
-    auto.
-Qed.
 
 Lemma addEdge_tree_connected:
   tree g1 -> 
@@ -278,18 +65,28 @@ Lemma addEdge_tree_connected:
 Proof.
   intros tr1 x y Hx Hy.
   pose proof Hadd as Hadd'.
-  destruct Hadd' as [[Hu [Hv He]] Hvx _ Hstep_add].
-  apply Hvx in Hx as [Hx | Hx]; apply Hvx in Hy as [Hy | Hy]; subst.
+  destruct Hadd' as [ Hvx _ Hstep_add].
+  apply Hvx in Hx as [|[|]]; apply Hvx in Hy as [|[|]]; subst.
   * eapply (sub_reachable g1 g2);
-    [apply addEdge_subgraph|apply tree_connected; auto].
+    [eapply addEdge_subgraph; eauto|eapply tree_connected; eauto].
+  * eapply (sub_reachable g1 g2); 
+    [eapply addEdge_subgraph; eauto|eapply tree_connected; eauto].
   * transitivity u.
     + eapply (sub_reachable g1 g2); 
-      [apply addEdge_subgraph|apply tree_connected; auto].
-    + apply step_rt; exists e; apply addEdge_new_step_uv.
+      [eapply addEdge_subgraph; eauto|eapply tree_connected; eauto].
+    + apply step_rt; exists e; apply Hadd; right; auto. 
+  * eapply (sub_reachable g1 g2); 
+    [eapply addEdge_subgraph; eauto|eapply tree_connected; eauto]. 
+  * reflexivity. 
   * transitivity u.
-    + apply step_rt; exists e; apply addEdge_new_step_vu.
     + eapply (sub_reachable g1 g2); 
-      [apply addEdge_subgraph|apply tree_connected; auto].
+      [eapply addEdge_subgraph; eauto|eapply tree_connected; eauto].
+    + apply step_rt; exists e; apply Hadd; right; auto. 
+  * transitivity u.
+    + apply step_rt; exists e; apply Hadd; right; auto. 
+    + eapply (sub_reachable g1 g2); 
+      [eapply addEdge_subgraph; eauto|eapply tree_connected; eauto].
+  * apply step_rt; exists e; apply Hadd; right; auto. 
   * reflexivity. 
   Unshelve. all: auto.
 Qed.
@@ -322,10 +119,10 @@ Lemma deleteLeaf_tree_connected:
   connected g1.
 Proof.
   intros tr2 x y Hx Hy.
-  assert (Hxv: x <> v) by (intros Heq; subst; destruct Hadd as [[? []] _ _]; contradiction).
-  assert (Hyv: y <> v) by (intros Heq; subst; destruct Hadd as [[? []] _ _]; contradiction).
+  assert (Hxv: x <> v) by (intros Heq; subst; contradiction).
+  assert (Hyv: y <> v) by (intros Heq; subst; contradiction).
   pose proof Hadd as Hadd'.
-  destruct Hadd' as [[Hu [Hv He]] Hvertex _ _].
+  destruct Hadd' as [ Hvertex _ Hstep_add].
   assert (Hx2: vvalid g2 x) by (apply Hvertex; left; auto).
   assert (Hy2: vvalid g2 y) by (apply Hvertex; left; auto).
   destruct (reachable_valid_epath g2 x y (tree_connected g2 tr2 x y Hx2 Hy2))
@@ -345,7 +142,7 @@ Proof.
   eapply tree_no_curcuit; eauto.
   exists x, p; split; auto.
   split; auto.
-  apply addEdge_valid_epath_old_to_new; auto.
+  eapply addEdge_valid_epath_old_to_new; eauto.
 Qed.
 
 Theorem deleteLeaf_tree:
@@ -357,7 +154,7 @@ Proof.
   apply deleteLeaf_tree_no_curcuit; auto.
 Qed.
 
-End ADD_EDGE_TREE.
+End ADDLEAFISTREE.
 
 (* 树本身的一些性质。可能需要用到树操作来进行证明 *)
 
@@ -371,6 +168,7 @@ Context {G V E: Type}
         {undirectedgraph: UndirectedGraph G V E}
         {finitegraph: FiniteGraph G V E}
         {simplegraph: SimpleGraph G V E}. (*这里要求原图是simple graph是一个很明显的疑惑点*)
+
 Context {P: Type}
         {path: Path G V E P}
         {emptypath: EmptyPath G V E P path}
@@ -378,6 +176,7 @@ Context {P: Type}
         {concatpath: ConcatPath G V E P path}
         {destruct1npath: Destruct1nPath G V E P path emptypath singlepath concatpath}
         {tr: Tree G V E P}.
+
 Context (g: G)
         {g_valid: gvalid g}
         {g_tree: tree g}.
@@ -505,16 +304,6 @@ Qed.
 Section FINITE.
 
 Context {fg: FiniteGraph G V E}. 
-
-#[export]Instance vlist_bijective: VListBijective G V E.
-Proof. apply finite_graph_vlist_bijective; auto. Qed.
-
-#[export]Instance elist_bijective: EListBijective G V E.
-Proof. 
-  apply finite_egraph_elist_bijective; auto.
-  apply finite_graph_finite_egraph; auto. 
-  
-Qed.
 
 
 Definition is_leaf (v: V): Prop := 
@@ -928,7 +717,7 @@ Context {G V E: Type}
         {undirectedgraph: UndirectedGraph G V E}
         {finitegraph: FiniteGraph G V E}
         {simplegraph: SimpleGraph G V E}
-        {addEdgeExist: addEdgeExist G V E}. (*要求原图的加边存在性*)
+        {addLeafExist: addLeafExist G V E}. (*要求原图的加边存在性*)
 Context {P: Type}
         {path: Path G V E P}
         {emptypath: EmptyPath G V E P path}
@@ -1022,17 +811,14 @@ Proof.
         apply at_least_one_leaf; auto. 
         destruct (bijective_listE g) eqn: Hel; [rewrite Zlength_nil in H; lia|].
         exists e; apply bijective_edges; auto; subst; rewrite Hel; left; auto.
-        (* exfalso; apply test_point. *)
       } destruct Hleaf as [v [u [[e Hstep] Hleaf]]]. 
-      apply addEdge_valid in Hstep as [h [Hvalid Hadd]]; auto.
+      eapply addLeaf_valid in Hstep as [h [Hvalid [[Hu [Hv He]] Hadd]]]; eauto. 
 
-      assert (Hv: ~ vvalid h v) by (destruct Hadd; tauto). 
-      assert (He: ~ evalid h e) by (destruct Hadd; tauto). 
       assert (tree h) by (eapply deleteLeaf_tree with (g2:=g); eauto). 
       assert (HpermV : Permutation (bijective_listV g) (v :: bijective_listV h)).
       {
         eapply addEdge_vlist_permutation; eauto.
-        + apply bijective_listV_NoDup; auto.
+        + apply bijective_listV_NoDup; auto. 
         + apply bijective_vertices; auto.
         + apply bijective_listV_NoDup; auto.
         + apply bijective_vertices; auto.
@@ -1125,3 +911,233 @@ Proof.
 Qed.
 
 End TREE_OPERATION.
+
+Section SPANNING_TREE.
+
+Context {G V E: Type} 
+        {pg: Graph G V E} 
+        {gv: GValid G}
+        {stepvalid: StepValid G V E}
+        {noemptyedge: NoEmptyEdge G V E}
+        {step_aux_unique_undirected: StepUniqueUndirected G V E}
+        {undirectedgraph: UndirectedGraph G V E}
+        {finitegraph: FiniteGraph G V E}
+        {simplegraph: SimpleGraph G V E}.
+Context {P: Type}
+        {path: Path G V E P}
+        {emptypath: EmptyPath G V E P path}
+        {singlepath: SinglePath G V E P path}
+        {concatpath: ConcatPath G V E P path}
+        {destruct1npath: Destruct1nPath G V E P path emptypath singlepath concatpath}
+        {tr: Tree G V E P}.
+Context (g: G)
+        {g_valid: gvalid g}
+        {g_connected: connected g}.
+
+Context {fg: FiniteGraph G V E}
+        {addEdgeExist: addEdgeExist G V E}.  
+
+Definition connected_subgraph_eq (h: G) : Prop := 
+  gvalid h /\ connected h /\ subgraph_vertex_eq h g. 
+
+Lemma connected_subgraph_eq_refl: 
+  connected_subgraph_eq g. 
+Proof. 
+  repeat split; auto. 
+Qed. 
+
+Lemma connected_subgraph_eq_edge_num_lt_bounded: 
+  forall h, connected_subgraph_eq h ->  
+  (edge_num h <= edge_num g)%Z. 
+Proof. 
+  intros h [Hvalid [Hconnected Hsub]]. 
+  unfold edge_num. 
+  pose proof (bijective_listE_NoDup g g_valid) as elist_nodup_g.
+  pose proof (bijective_edges g g_valid) as elist_iff_g.
+  pose proof (bijective_listE_NoDup h Hvalid) as elist_nodup_h.
+  pose proof (bijective_edges h Hvalid) as elist_iff_h.
+
+  assert (forall e, In e (bijective_listE h) -> In e (bijective_listE g)). {
+    intros e Heh. 
+    rewrite elist_iff_h in Heh. 
+    apply no_empty_edge in Heh as [x [y Hstep]]; auto. 
+    rewrite elist_iff_g. 
+    eapply step_evalid; eauto. 
+    apply Hsub; eauto. 
+  }
+  rewrite ! Zlength_correct.
+  apply NoDup_incl_length in H; auto. 
+  lia.
+Qed. 
+
+Lemma connected_subgraph_eq_edge_num_gt_bounded: 
+  forall h, connected_subgraph_eq h ->  
+  (edge_num h >= 0)%Z. 
+Proof. 
+  intros. 
+  unfold edge_num. 
+  rewrite ! Zlength_correct.
+  lia.
+Qed. 
+
+Lemma connected_subgraph_eq_exist: 
+  exists h, 
+    min_object_of_subset Z.le connected_subgraph_eq edge_num h.
+Proof.
+  set (Q := fun n => exists h, connected_subgraph_eq h /\ edge_num h = n).
+  assert (Hexists: exists n, (0 <= n <= edge_num g)%Z /\ Q n).
+  { exists (edge_num g)%Z. split.
+    + split; unfold edge_num; 
+      rewrite ! Zlength_correct; lia. 
+    + exists g; repeat split; auto. 
+  }
+  destruct (min_n_in_range Q (edge_num g)) as [m [Hm [Hlow Hhigh]]]; auto. 
+  { unfold edge_num; rewrite ! Zlength_correct; lia. }
+  destruct Hm as [h [Hconnected_subgraph_eq Hedge_num]].
+  exists h; split; auto. 
+  intros; rewrite Hedge_num; apply Hhigh; auto. 
+  split; [unfold edge_num; rewrite ! Zlength_correct; lia|
+  apply connected_subgraph_eq_edge_num_lt_bounded; auto]. 
+  exists b; split; auto. 
+Qed.
+
+Lemma spanningtree_exist: 
+  exists h, 
+    gvalid h /\ tree h /\ subgraph_vertex_eq h g.
+Proof.
+  destruct connected_subgraph_eq_exist as [h [[Hvalid [Hconnected Hsub]] Hmin]].
+  exists h; split; [|split]; auto. 
+  apply tree_decide; auto. 
+  intros [u [p [Hpne Hsimple]]]. 
+  destruct p; [auto|clear Hpne]. 
+  pose proof Hsimple as [Hpath Hnodup]. 
+  apply valid_epath_cons_inv in Hpath as [v [Hstep Hrest]]. 
+  pose proof Hvalid as Hh.
+  eapply addEdge_valid_inv in Hvalid as [i [Hvalidi [Hadd [Hvx [Hvy Hnotinea]]]]]; 
+  [|eapply step_vvalid1; eauto|eapply step_vvalid2; eauto|eapply step_evalid; eauto]. 
+  assert (connected_subgraph_eq i). {
+    split; [|split]; auto. 
+    + intros x y Hx Hy. 
+      assert (Hhx:vvalid h x) by (eapply Hadd; auto). 
+      assert (Hhy:vvalid h y) by (eapply Hadd; auto). 
+      pose proof Hconnected x y Hhx Hhy. 
+      apply reachable_valid_epath in H as [q Hqpath]. 
+      apply valid_epath_simple in Hqpath as [q' [Hqpath Hqnodup]].
+      2:{ intros; eapply step_aux_unique_undirected with (g:=h); try apply Hh; eauto. } 
+      clear q; rename q' into q. 
+      destruct (classic (In e q)) as [Hin | Hnotin]; [|].
+      * apply in_split in Hin as [q1 [q2 Hp]]; subst.
+        apply valid_epath_app_inv in Hqpath as [a [Hqpre Hqrest]].
+        apply valid_epath_cons_inv in Hqrest as [b [Hqstep Hqpost]].
+        eapply step_aux_unique_undirected in Hstep as [[]|[]]; eauto; subst a b.
+        - eapply valid_epath_reachable. 
+          instantiate (1:= q1 ++ (rev p) ++ q2).
+          eapply addEdge2_valid_epath_new_to_old; eauto. 
+          { 
+            eapply valid_epath_app; eauto. 
+            eapply valid_epath_app; eauto. 
+            apply valid_epath_rev; auto. 
+          }
+          {
+            rewrite ! in_app_iff; intros ?. 
+            apply NoDup_remove_2 in Hqnodup; rewrite in_app_iff in Hqnodup.
+            inversion Hnodup; subst. 
+            rewrite <- in_rev in H. 
+            tauto. 
+          } 
+        - eapply valid_epath_reachable.
+          instantiate (1:= q1 ++ p ++ q2).
+          eapply addEdge2_valid_epath_new_to_old; eauto. 
+          { 
+            eapply valid_epath_app; eauto. 
+            eapply valid_epath_app; eauto. 
+          }
+          {
+            rewrite ! in_app_iff; intros ?. 
+            apply NoDup_remove_2 in Hqnodup; rewrite in_app_iff in Hqnodup.
+            inversion Hnodup; subst. 
+            tauto. 
+          } 
+      * eapply valid_epath_reachable.
+        eapply addEdge2_valid_epath_new_to_old; eauto. 
+    + split. 
+      * intros; split; intros. 
+        - apply Hsub. 
+          apply Hadd. 
+          left; auto. 
+        - apply Hsub in H.  
+          apply Hadd in H as [|[|]]; auto; subst; auto. 
+      * intros. 
+        apply Hsub. 
+        apply Hadd; left; auto. 
+  }
+  apply addEdge2_elist_permutation in Hadd; auto. 
+  apply Permutation_length in Hadd. 
+  apply Hmin in H; unfold edge_num in H. 
+  rewrite ! Zlength_correct in H. 
+  simpl in Hadd. 
+  lia. 
+Qed. 
+
+Context {ew: EdgeWeight G E}.
+
+Theorem connected_have_mst: 
+  exists h, is_mst g h. 
+Proof. 
+  set (edge_weight_sum := fun l => fold_right Z_op_plus (Some 0%Z) (map (weight g) l)).
+  set (legal := fun h => gvalid h /\ tree h /\ subgraph_vertex_eq h g).
+  assert (edge_weight_sum_perm:
+    forall l1 l2, Permutation l1 l2 -> edge_weight_sum l1 = edge_weight_sum l2).
+  {
+    intros l1 l2 Hperm. 
+    induction Hperm; unfold edge_weight_sum in *; simpl; auto.
+    - rewrite IHHperm; auto.
+    - destruct (weight g x), (weight g y), (fold_right Z_op_plus (Some 0%Z) (map (weight g) l)); simpl; auto; f_equal; lia.
+    - congruence.
+  }
+  destruct (Nodup_all_sublists (bijective_listE g) (bijective_listE_NoDup g g_valid))
+    as [edge_sets [Hedge_sets_sound Hedge_sets_complete]].
+  set (represented := fun l =>
+    In l edge_sets /\ exists h, legal h /\ Permutation l (bijective_listE h)).
+
+  assert (legal_edges_in_g:
+    forall h, legal h -> incl (bijective_listE h) (bijective_listE g)).
+  {
+    intros h [Hvalid [_ Hsub]] e Hin.
+    apply bijective_edges in Hin; auto.
+    apply no_empty_edge in Hin as [u [v Hstep]]; auto.
+    apply bijective_edges; auto.
+    eapply step_evalid; eauto. 
+    apply Hsub; eauto.
+  }
+  destruct spanningtree_exist as [h0 Hh0].
+  assert (represented_exists : exists l, In l edge_sets /\ represented l).
+  {
+    destruct (Hedge_sets_complete (bijective_listE h0)) as [l0 [Hl0 Hperm0]].
+    - apply bijective_listE_NoDup; tauto.
+    - apply legal_edges_in_g; auto.
+    - exists l0; split; auto.
+      split; auto; exists h0; split; auto.
+  }
+  destruct represented_exists as [l0 [Hl0 Hrepr0]].
+  destruct (Z_op_finite_min edge_weight_sum represented edge_sets l0 Hl0 Hrepr0
+    ltac:(intros y Hy; exact (proj1 Hy))) as [lm [Hreprm Hminm]].
+  destruct Hreprm as [_ [hm [Hlegalm Hpermm]]].
+  exists hm.
+  split; auto.
+  intros h Hlegalh.
+  destruct (Hedge_sets_complete (bijective_listE h)) as [lh [Hlh Hpermh]].
+  - apply bijective_listE_NoDup; try tauto. 
+    apply Hlegalh.
+  - apply legal_edges_in_g; auto.
+  - assert (Hreprh : represented lh) by (split; auto; exists h; split; auto).
+    specialize (Hminm lh Hreprh).
+    pose proof (edge_weight_sum_perm lm (bijective_listE hm) Hpermm).
+    unfold edge_weight_sum in H. 
+    unfold total_weight.
+    rewrite <- H.
+    rewrite (edge_weight_sum_perm lh (bijective_listE h) Hpermh) in Hminm.
+    exact Hminm.
+Qed. 
+
+End SPANNING_TREE.
