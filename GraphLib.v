@@ -17,7 +17,6 @@ Require Export GraphLib.reachable.epath.
 
 (* 权重支持 *)
 Require Export GraphLib.reachable.Zweight.
-Require Export GraphLib.reachable.eweight.
 
 (* 特殊图结构 *)
 Require Export GraphLib.directed.rootedtree.
