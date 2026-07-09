@@ -13,6 +13,7 @@ Record vpath_iff_epath_prop
     {G V E: Type} 
     `{pg: Graph G V E} 
     `{gv: GValid G} 
+    (g: G)
     (pv: list V) 
     (pe: list E): Prop := {
     vpath_iff_epath_length: length pv = length pe + 1;
@@ -47,7 +48,7 @@ Class Path
         P -> list E;
     vpath_iff_epath: 
         forall g p, path_valid g p -> 
-            vpath_iff_epath_prop (vertex_in_path p) (edge_in_path p);
+            vpath_iff_epath_prop g (vertex_in_path p) (edge_in_path p);
 }.
 
 Class EmptyPath 
