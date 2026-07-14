@@ -13,7 +13,6 @@ Record vpath_iff_epath_prop
     {G V E: Type} 
     `{pg: Graph G V E} 
     `{gv: GValid G} 
-    (g: G)
     (pv: list V) 
     (pe: list E): Prop := {
     vpath_iff_epath_length: length pv = length pe + 1;
@@ -48,7 +47,7 @@ Class Path
         P -> list E;
     vpath_iff_epath: 
         forall g p, path_valid g p -> 
-            vpath_iff_epath_prop g (vertex_in_path p) (edge_in_path p);
+            vpath_iff_epath_prop (vertex_in_path p) (edge_in_path p);
 }.
 
 Class EmptyPath 
@@ -167,8 +166,7 @@ Class Destructn1Path
     destruct_n1_spec: forall g p (Hvalid: path_valid g p),
         path_snoc_spec g p (destruct_n1_path g p Hvalid);
 }.
-Print list_ind.
-Print list_rec.
+
 (* Type -> Prop ? *)
 Class PathInd1n 
     (G V E: Type) 
