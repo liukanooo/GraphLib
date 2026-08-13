@@ -1,4 +1,4 @@
-Require Import SetsClass.
+Require Import SetsClass.SetsClass.
 Require Import Coq.Lists.List.
 Require Import Lia.
 Require Import Coq.Logic.Classical.

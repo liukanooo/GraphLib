@@ -1,4 +1,4 @@
-Require Import SetsClass.
+Require Import SetsClass.SetsClass.
 Require Import Coq.ZArith.ZArith.
 Require Import Coq.Logic.Classical.
 Require Import Coq.Lists.List.

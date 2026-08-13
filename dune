@@ -1,0 +1,6 @@
+(coq.theory
+ (name GraphLib)
+ (modules (:standard \ directed.dfstree_dfn undirected.bigraph))
+ (theories ListLib MaxMinLib SetsClass))
+
+(include_subdirs qualified)

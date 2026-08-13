@@ -5,7 +5,7 @@ Require Import GraphLib.reachable.epath.
 Require Import GraphLib.reachable.path.
 Require Import Coq.Lists.List.
 Require Import Coq.Sorting.Permutation.
-Require Import SetsClass. 
+Require Import SetsClass.SetsClass.
 From ListLib Require Import General.NoDup.
 (* g1 is the subgraph of g2 *)
 Definition subgraph 
