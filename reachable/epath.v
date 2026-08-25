@@ -102,7 +102,7 @@ Proof.
   rewrite Hedge in Hlen; simpl in Hlen. 
   apply Some_injection in Hhd. erewrite head_valid in Hhd; eauto. 
   apply Some_injection in Htl. erewrite tail_valid in Htl; eauto. 
-  rewrite <- nth_error_O in Hhd. 
+  rewrite nth_error_O in Hhd. 
   unfold tl_error in Htl; rewrite Hlen in Htl.
   pose proof Hstep 0%nat u v e ltac:(rewrite Hedge; simpl; lia) ltac:(rewrite Hedge; simpl; auto) Hhd Htl. 
   apply H.
@@ -893,6 +893,11 @@ Local Open Scope Z.
 Definition epath_weight (g: G) (p: list E): option Z :=
   fold_right Z_op_plus (Some 0) (map (weight g) p). 
 
+Definition nonnegative_closed_path (g: G): Prop :=
+  forall p u,
+    valid_epath g u p u ->
+    Z_op_le (Some 0) (epath_weight g p).
+
 Theorem epath_weight_nil: 
   epath_weight g nil = Some 0.
 Proof. unfold epath_weight; simpl; auto. Qed.
@@ -931,6 +936,14 @@ Definition min_object_weight_epath (g: G) (u: V) (v: V) (p: list E): Prop :=
 
 Definition min_value_weight_epath (g: G) (u: V) (v: V) (z: option Z): Prop :=
   min_value_of_subset_with_default Z_op_le (fun p => valid_epath g u p v) (epath_weight g) None z. 
+
+Definition min_value_weight_epath_with_edge_bound
+  (g: G) (u: V) (v: V) (k: Z) (z: option Z): Prop :=
+  min_value_of_subset_with_default Z_op_le
+    (fun p => valid_epath g u p v /\ (Zlength p <= k)%Z)
+    (epath_weight g)
+    None
+    z.
 
 Definition min_object_weight_epath_in_vset (g: G) (u: V) (v: V) (vset: V -> Prop) (p: list E): Prop :=
   min_object_of_subset Z_op_le (fun p => is_epath_through_vset g u p v vset) (epath_weight g) p. 
