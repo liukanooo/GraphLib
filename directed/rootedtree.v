@@ -441,8 +441,8 @@ Proof.
     + subst. inversion H2; subst; 
       [inversion H1; subst | exfalso; apply H5; reflexivity].
       * exfalso; eapply offspring_not_father; eauto.
-      * apply Arith_base.le_lt_n_Sm_stt.
-        eapply num_of_offspring_le_on_step; eauto.
+      * assert (Hle: _ <= _) by (eapply num_of_offspring_le_on_step; eauto).
+        lia.
     + inversion H2; subst; inversion H1; subst; 
       specialize (IHl _ _ _ _ H0 H8 _ H H10); try lia. 
       exfalso; apply H6; unfold reachable. 
