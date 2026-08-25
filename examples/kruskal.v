@@ -66,7 +66,7 @@ Theorem kruskal_step:
     gvalid g1 /\ (forall u, ~ exists p, is_simple_epath g1 u p u /\ p <> nil) /\ (exists y1, is_mst r y1 /\ subgraph2 g1 y1) -> 
     step_aux r e u v -> 
     addEdge g1 g2 u v e -> 
-    min_object_of_subset Z_op_le (fun e => forall u v, step_aux r e u v -> ~ reachable g1 u v) (weight r) e ->
+    min_object_of_subset Z_op_le (fun e => evalid r e /\ forall u v, step_aux r e u v -> ~ reachable g1 u v) (weight r) e ->
     (forall u, ~ exists p, is_simple_epath g2 u p u /\ p <> nil) /\ (exists y2, is_mst r y2 /\ subgraph2 g2 y2).
 Proof.
   intros g1 g2 u v e [Hvalid1 [Hno_circuit [y1 [Hmst1 Hsubgraph1]]]] Hstepr Hadd Hmin. 
@@ -74,7 +74,7 @@ Proof.
   (* 新图无环 *)
   1:{ 
     intros  w [p [Hsimple Hnotnil]]. 
-    destruct Hmin as [? _]. 
+    destruct Hmin as [[_ H] _]. 
     destruct (classic (In e p)) as [Hein | Hnotin]. 
     - apply in_split in Hein as [p1 [p2 Heq]]. 
       subst; clear Hnotnil.  
@@ -163,7 +163,7 @@ Proof.
     (* p 中包含一条跨越 g1 当前连通分量的旧树边 a *)
     assert (exists x y a, reachable g1 u x /\ ~ reachable g1 u y /\ step_aux h a x y /\ In a p /\ a <> e) as [x [y [a [Hx [Hy [Hstep_ah [Hinap Hane]]]]]]].
     {
-      pose proof Hmin as [Hmin_in _].
+      pose proof Hmin as [[_ Hmin_in] _].
       assert (Hnot_reach_uv : ~ reachable g1 u v) by (eapply Hmin_in; eauto). 
       eapply addEdge2_cycle_without_new_edge_simple in Hp
       as [q [[Hqpath Hqnodup] Hqmem]]; eauto.
@@ -254,16 +254,22 @@ Proof.
       { apply bijective_edges; auto. eapply step_evalid; eauto. }
       assert (Hwea : Z_op_le (weight r e) (weight r a)).
       {
+        assert (Hstep_ra_xy : step_aux r a x y) by (apply Hy1_step; auto).
         destruct Hmin as [_ Hmin_sound].
         apply Hmin_sound.
-        intros s t Hstep_ra Hreach_st.
-        assert (Hstep_ra_xy : step_aux r a x y) by (apply Hy1_step; auto).
-        eapply step_aux_unique_undirected in Hstep_ra as [[Hs Ht] | [Hs Ht]]; eauto; subst.
-        - apply Hy. eapply reachable_trans; eauto.
-        - apply Hy. eapply reachable_trans; [apply Hx|].
-          destruct (reachable_valid_epath g1 y t Hreach_st) as [q Hq].
-          eapply valid_epath_reachable.
-          apply valid_epath_rev; eauto.
+        split.
+        + eapply step_evalid; eauto.
+        + intros s t Hstep_ra Hreach_st.
+          pose proof (@GraphLib.graph_basic.step_aux_unique_undirected
+                        G V E pg gv step_aux_unique_undirected
+                        r a x y s t r_valid Hstep_ra_xy Hstep_ra)
+            as Hcases.
+          destruct Hcases as [[Hs Ht] | [Hs Ht]]; subst.
+          - apply Hy. eapply reachable_trans; eauto.
+          - apply Hy. eapply reachable_trans; [apply Hx|].
+            destruct (reachable_valid_epath g1 y t Hreach_st) as [q Hq].
+            eapply valid_epath_reachable.
+            apply valid_epath_rev; eauto.
       }
       assert (Hnone_in_sum :
         forall l, In a l -> weight r a = None -> sumE l = None).
