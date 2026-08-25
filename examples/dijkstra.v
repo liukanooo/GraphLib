@@ -381,8 +381,12 @@ Proof.
   pose proof H_inv2 u H_uS as Hdistu. 
   pose proof H_inv2 v H_vS as Hdistv.  
   pose proof min_value_weight_epath_in_vset_exist u v S as [z Hz]. 
+  assert (Hnonneg: nonnegative_closed_path g).
+  { unfold nonnegative_closed_path.
+    intros p0 u0 Hvalid.
+    exact (non_neg_loop u0 p0 Hvalid). }
   pose proof @floyd_warshall_step_spec _ _ _ _ _ _ g g_valid 
-    _ _ _ _ _ _ _ non_neg_loop 
+    _ _ _ _ _ _ _ Hnonneg 
     S src v u (dist v) (dist u) z 
     Hdistv Hdistu Hz.
   destruct Hz as [[[p [[Hpvalid Hpmin] Hpeq]] _]|[]]. 
@@ -506,8 +510,12 @@ Proof.
   pose proof H_inv2 v H_vS as Hdistv.  
   pose proof min_value_weight_epath_in_vset_exist u v S as [z Hz]. 
   (* 应用 Floyd-Warshall 步骤定理 *)
+  assert (Hnonneg: nonnegative_closed_path g).
+  { unfold nonnegative_closed_path.
+    intros p0 u0 Hvalid.
+    exact (non_neg_loop u0 p0 Hvalid). }
   pose proof @floyd_warshall_step_spec _ _ _ _ _ _ g g_valid 
-    _ _ _ _ _ _ _ non_neg_loop 
+    _ _ _ _ _ _ _ Hnonneg 
     S src v u (dist v) (dist u) z 
     Hdistv Hdistu Hz.
   destruct Hz as [[[p [[Hpvalid Hpmin] Hpeq]] _]|[]]. 

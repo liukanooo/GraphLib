@@ -36,7 +36,7 @@ Notation reachable := (reachable g).
 
 (* floyd算法允许存在负权，但是不允许存在负权回路 *)
 
-Context {non_neg_loop: forall u p, valid_epath g u p u -> Z_op_le (Some 0) (epath_weight g p)}.
+Context {no_negative_closed_path: nonnegative_closed_path g}.
 
 Theorem floyd_warshall_update_start: 
   forall S k v d_kv, 
@@ -56,8 +56,8 @@ Proof.
       (* 路径 q 分解: k --p_pre--> k --p_mid--> k --p_suf--> v
                       \___≥0环____/\____≥0环___/\___通过S___/
          消除两个非负环后: k ----------------------p_suf--> v 更优 *)
-      destruct H_mid as [H_mid _]; apply non_neg_loop in H_mid.
-      destruct H_pre as [H_pre _]; apply non_neg_loop in H_pre. 
+      destruct H_mid as [H_mid _]; apply no_negative_closed_path in H_mid.
+      destruct H_pre as [H_pre _]; apply no_negative_closed_path in H_pre. 
       apply Hpmin in H_suf.
       
       rewrite Heq; rewrite !epath_weight_app_assoc. 
@@ -125,7 +125,7 @@ Proof.
         assert (epath_weight g (p_pre ++ p_mid) = Some 0). {
           destruct H_pre as [H_pre _].
           destruct H_mid as [H_mid _]. 
-          apply non_neg_loop in H_pre, H_mid. 
+          apply no_negative_closed_path in H_pre, H_mid. 
           rewrite epath_weight_app_assoc. 
           rewrite epath_weight_app_assoc in H1. 
           destruct (epath_weight g p_pre); destruct (epath_weight g p_mid); simpl in *; try lia.
@@ -174,8 +174,8 @@ Proof.
       (* 路径 q 分解: u --p_pre--> k --p_mid--> k --p_suf--> k
                       \___通过S___/\___≥0环____/\___≥0环____/
          消除两个非负环后: u --p_pre----------------------> k 更优 *)
-      destruct H_mid as [H_mid _]; apply non_neg_loop in H_mid.
-      destruct H_suf as [H_suf _]; apply non_neg_loop in H_suf.
+      destruct H_mid as [H_mid _]; apply no_negative_closed_path in H_mid.
+      destruct H_suf as [H_suf _]; apply no_negative_closed_path in H_suf.
       apply Hpmin in H_pre.
       
       rewrite Heq; rewrite !epath_weight_app_assoc.
@@ -241,7 +241,7 @@ Proof.
         assert (epath_weight g (p_mid ++ p_suf) = Some 0). {
           destruct H_mid as [H_mid _].
           destruct H_suf as [H_suf _].
-          apply non_neg_loop in H_mid, H_suf.
+          apply no_negative_closed_path in H_mid, H_suf.
           rewrite epath_weight_app_assoc.
           rewrite epath_weight_app_assoc in H1.
           destruct (epath_weight g p_mid); destruct (epath_weight g p_suf); simpl in *; try lia.
@@ -311,7 +311,7 @@ Proof.
       rewrite <- Z_op_plus_O_l at 1. 
       apply Z_op_plus_mono; auto. 
       destruct H_loop_valid as [H_loop_valid _].
-      apply non_neg_loop in H_loop_valid. auto.
+      apply no_negative_closed_path in H_loop_valid. auto.
     - exists (p_uk ++ p_kv); split. 
       2: { 
         rewrite epath_weight_app_assoc. 
@@ -335,7 +335,7 @@ Proof.
         rewrite <- Z_op_plus_O_l at 1. 
         apply Z_op_plus_mono; auto. 
         destruct H_loop_valid as [H_loop_valid _].
-        apply non_neg_loop in H_loop_valid. auto. 
+        apply no_negative_closed_path in H_loop_valid. auto. 
   }
 
   { (* case: d_uvS = Some, d_ukS = Some, d_kvS = None *)
@@ -411,7 +411,7 @@ Proof.
       rewrite <- Z_op_plus_O_l at 1. 
       apply Z_op_plus_mono; auto. 
       destruct H_loop_valid as [H_loop_valid _].
-      apply non_neg_loop in H_loop_valid. auto. 
+      apply no_negative_closed_path in H_loop_valid. auto. 
   } 
   
   { (* case: d_uvS = None, d_ukS = Some, d_kvS = None *)
